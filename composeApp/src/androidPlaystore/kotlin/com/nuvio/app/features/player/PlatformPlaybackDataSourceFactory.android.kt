@@ -13,8 +13,9 @@ internal object PlatformPlaybackDataSourceFactory {
         externalSubtitles: List<com.nuvio.app.features.streams.StreamSubtitle> = emptyList(),
     ): DataSource.Factory {
         val httpFactory = PlayerPlaybackNetworking.createHttpDataSourceFactory(defaultRequestHeaders)
+        val cachedHttpFactory = PlayerDiskCache.wrap(context, httpFactory)
         val subtitleHeaderFactory = SubtitleRequestHeaderDataSourceFactory(
-            upstreamFactory = httpFactory,
+            upstreamFactory = cachedHttpFactory,
             externalSubtitles = externalSubtitles
         )
         val baseFactory: DataSource.Factory = DefaultDataSource.Factory(context, subtitleHeaderFactory)

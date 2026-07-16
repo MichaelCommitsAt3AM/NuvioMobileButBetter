@@ -23,10 +23,10 @@ import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 
-private const val gitHubOwner = "NuvioMedia"
-private const val gitHubRepo = "NuvioMobile"
+private const val gitHubOwner = "MichaelCommitsAt3AM"
+private const val gitHubRepo = "NuvioMobileButBetter"
 private const val gitHubApiBase = "https://api.github.com"
-private const val releaseChannelBranch = "cmp-rewrite"
+private const val releaseChannelBranch = ""
 
 data class AppUpdate(
     val tag: String,
@@ -155,7 +155,7 @@ private object AppUpdaterRepository {
     }
 
     private fun GitHubReleaseDto.matchesRequestedChannel(): Boolean {
-        val channel = releaseChannelBranch
+        val channel = releaseChannelBranch.takeIf { it.isNotBlank() } ?: return true
         if (targetCommitish?.trim()?.equals(channel, ignoreCase = true) == true) {
             return true
         }

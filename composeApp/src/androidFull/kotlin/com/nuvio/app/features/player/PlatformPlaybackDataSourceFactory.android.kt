@@ -18,8 +18,9 @@ internal object PlatformPlaybackDataSourceFactory {
         } else {
             PlayerPlaybackNetworking.createHttpDataSourceFactory(defaultRequestHeaders)
         }
+        val cachedNetworkFactory = PlayerDiskCache.wrap(context, networkFactory)
         val subtitleHeaderFactory = SubtitleRequestHeaderDataSourceFactory(
-            upstreamFactory = networkFactory,
+            upstreamFactory = cachedNetworkFactory,
             externalSubtitles = externalSubtitles
         )
         val baseFactory: DataSource.Factory = DefaultDataSource.Factory(context, subtitleHeaderFactory)

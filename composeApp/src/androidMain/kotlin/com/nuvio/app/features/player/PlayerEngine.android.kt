@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.text.SpannableString
@@ -188,6 +189,9 @@ private fun ExoPlayerSurface(
     onError: (String?) -> Unit,
 ) {
     val context = LocalContext.current
+    val isLowRamDevice = remember(context) {
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice ?: false
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnSnapshot = rememberUpdatedState(onSnapshot)
     val latestOnError = rememberUpdatedState(onError)
@@ -294,6 +298,26 @@ private fun ExoPlayerSurface(
         }
     }
 
+    val loadControl = remember(
+        sourceUrl,
+        sourceAudioUrl,
+        sanitizedSourceHeaders,
+        sanitizedSourceResponseHeaders,
+        normalizedStreamType,
+        useYoutubeChunkedPlayback,
+        effectiveDecoderPriority,
+        isLowRamDevice,
+    ) {
+        DynamicBackBufferLoadControl(
+            minBufferMs = 15_000,
+            maxBufferMs = 70_000,
+            bufferForPlaybackMs = DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+            bufferForPlaybackAfterRebufferMs = 5_000,
+            targetBufferBytes = 100 * 1024 * 1024,
+            isLowRamDevice = isLowRamDevice,
+        )
+    }
+
     val exoPlayer = remember(
         sourceUrl,
         sourceAudioUrl,
@@ -302,6 +326,7 @@ private fun ExoPlayerSurface(
         normalizedStreamType,
         useYoutubeChunkedPlayback,
         effectiveDecoderPriority,
+        loadControl,
     ) {
         val renderersFactory = SubtitleOffsetRenderersFactory(
             context = context,
@@ -323,16 +348,6 @@ private fun ExoPlayerSurface(
                 setParameters(buildUponParameters().setTunnelingEnabled(true))
             }
         }
-
-        val loadControl = DefaultLoadControl.Builder()
-            .setTargetBufferBytes(100 * 1024 * 1024)
-            .setBufferDurationsMs(
-                15_000,
-                70_000,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                5_000
-            )
-            .build()
 
         val player = if (useLibass) {
             ExoPlayer.Builder(context)
@@ -528,6 +543,10 @@ private fun ExoPlayerSurface(
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 Log.d(TAG, "onTracksChanged: ${tracks.groups.size} groups total")
                 exoPlayer.logCurrentTracks("onTracksChanged")
+                val selectedVideoFormat = tracks.groups
+                    .firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+                    ?.let { group -> (0 until group.length).firstOrNull(group::isTrackSelected)?.let(group::getTrackFormat) }
+                loadControl.updateBackBufferForVideoFormat(selectedVideoFormat)
                 pendingAudioTrackSelection.firstOrNull()?.let { selection ->
                     if (tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }) {
                         pendingAudioTrackSelection.clear()
