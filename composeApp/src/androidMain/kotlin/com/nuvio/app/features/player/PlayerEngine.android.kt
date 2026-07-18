@@ -374,6 +374,7 @@ private fun ExoPlayerSurface(
                 .build()
         }
 
+        PlayerDiskCache.onPlaybackStarted()
         player
     }
 
@@ -600,6 +601,7 @@ private fun ExoPlayerSurface(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             exoPlayer.release()
+            PlayerDiskCache.onPlaybackStopped()
         }
     }
 

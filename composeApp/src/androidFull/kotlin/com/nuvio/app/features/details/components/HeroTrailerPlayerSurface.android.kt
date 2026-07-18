@@ -28,6 +28,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import com.nuvio.app.features.player.PlatformPlaybackDataSourceFactory
+import com.nuvio.app.features.player.PlayerDiskCache
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -77,6 +78,7 @@ actual fun HeroTrailerPlayerSurface(
                 volume = if (muted) 0f else 1f
                 prepare()
             }
+            .also { PlayerDiskCache.onPlaybackStarted() }
     }
 
     DisposableEffect(exoPlayer, lifecycleOwner) {
@@ -140,6 +142,7 @@ actual fun HeroTrailerPlayerSurface(
             detachVideoSurface()
             exoPlayer.stop()
             exoPlayer.release()
+            PlayerDiskCache.onPlaybackStopped()
             playerContainer = null
         }
     }
