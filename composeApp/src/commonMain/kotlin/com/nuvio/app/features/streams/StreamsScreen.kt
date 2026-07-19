@@ -38,11 +38,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material.icons.rounded.Speed
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -78,6 +83,10 @@ import com.nuvio.app.core.ui.NuvioBottomSheetDivider
 import com.nuvio.app.core.ui.NuvioModalBottomSheet
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.dismissNuvioBottomSheet
+import com.nuvio.app.features.downloads.DownloadFilterResult
+import com.nuvio.app.features.downloads.DownloadFilterSettingsRepository
+import com.nuvio.app.features.downloads.DownloadStreamFilter
+import com.nuvio.app.features.downloads.DownloadStreamFilterMode
 import com.nuvio.app.features.downloads.DownloadsRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -534,6 +543,8 @@ private fun MobileStreamsLayout(
                         selectedFilter = uiState.selectedFilter,
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
+                        downloadFilterMode = uiState.downloadFilterMode,
+                        onDownloadFilterModeSelected = { StreamsRepository.setDownloadFilterMode(it) },
                     )
 
                     StreamList(
@@ -744,6 +755,8 @@ internal fun ProviderFilterRow(
     selectedFilter: String?,
     onFilterSelected: (String?) -> Unit,
     onRefresh: () -> Unit,
+    downloadFilterMode: DownloadStreamFilterMode,
+    onDownloadFilterModeSelected: (DownloadStreamFilterMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val addonGroups = groups.filter { it.streams.isNotEmpty() || it.isLoading }
@@ -760,6 +773,10 @@ internal fun ProviderFilterRow(
             contentDescription = stringResource(Res.string.streams_refresh),
             isSelected = false,
             onClick = onRefresh,
+        )
+        DownloadFilterChip(
+            mode = downloadFilterMode,
+            onModeSelected = onDownloadFilterModeSelected,
         )
         // "All" chip
         FilterChip(
@@ -855,6 +872,61 @@ private fun FilterChip(
     }
 }
 
+@Composable
+private fun DownloadFilterChip(
+    mode: DownloadStreamFilterMode,
+    onModeSelected: (DownloadStreamFilterMode) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val isDataSaver = mode == DownloadStreamFilterMode.DATA_SAVER
+    val label = if (isDataSaver) {
+        stringResource(Res.string.streams_download_filter_data_saver)
+    } else {
+        stringResource(Res.string.streams_download_filter_best_quality)
+    }
+
+    Box {
+        FilterChip(
+            label = label,
+            icon = Icons.Rounded.Speed,
+            contentDescription = stringResource(Res.string.streams_download_filter_label),
+            isSelected = isDataSaver,
+            onClick = { expanded = true },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DownloadStreamFilterMode.entries.forEach { entry ->
+                val entryLabel = when (entry) {
+                    DownloadStreamFilterMode.BEST_QUALITY ->
+                        stringResource(Res.string.streams_download_filter_best_quality)
+                    DownloadStreamFilterMode.DATA_SAVER ->
+                        stringResource(Res.string.streams_download_filter_data_saver)
+                }
+                DropdownMenuItem(
+                    text = { Text(entryLabel) },
+                    leadingIcon = {
+                        if (entry == mode) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.size(24.dp))
+                        }
+                    },
+                    onClick = {
+                        onModeSelected(entry)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Stream List
 // ---------------------------------------------------------------------------
@@ -870,7 +942,20 @@ internal fun StreamList(
     resumeProgressFraction: Float?,
     modifier: Modifier = Modifier,
 ) {
-    val filteredGroups = uiState.filteredGroups
+    val baseGroups = uiState.filteredGroups
+    val isDataSaver = uiState.downloadFilterMode == DownloadStreamFilterMode.DATA_SAVER
+    val downloadFilterConfig by remember {
+        DownloadFilterSettingsRepository.ensureLoaded()
+        DownloadFilterSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
+    val filterResult = remember(baseGroups, isDataSaver, downloadFilterConfig) {
+        if (isDataSaver) {
+            DownloadStreamFilter.apply(baseGroups, downloadFilterConfig)
+        } else {
+            DownloadFilterResult(baseGroups, 0)
+        }
+    }
+    val filteredGroups = filterResult.groups
     val hasGroups = filteredGroups.isNotEmpty()
     val hasAnyStreams = filteredGroups.any { it.streams.isNotEmpty() }
     val anyLoading = filteredGroups.any { it.isLoading }
@@ -895,6 +980,12 @@ internal fun StreamList(
                 }
             }
 
+            isDataSaver && filterResult.hasHidden && !hasAnyStreams && !uiState.isAnyLoading -> {
+                item {
+                    DataSaverAllHiddenBlock(hiddenCount = filterResult.hiddenCount)
+                }
+            }
+
             !hasAnyStreams && !uiState.isAnyLoading -> {
                 item {
                     EmptyStateBlock(reason = uiState.emptyStateReason)
@@ -902,6 +993,11 @@ internal fun StreamList(
             }
 
             else -> {
+                if (isDataSaver && filterResult.hasHidden) {
+                    item(key = "data_saver_hint") {
+                        DataSaverHiddenHint(hiddenCount = filterResult.hiddenCount)
+                    }
+                }
                 filteredGroups.forEachIndexed { groupIndex, group ->
                     streamSection(
                         sectionKey = streamSectionRenderKey(groupIndex = groupIndex, group = group),
@@ -1298,6 +1394,72 @@ private fun EmptyStateBlock(
         )
         Text(
             text = message,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun DataSaverHiddenHint(
+    hiddenCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Speed,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = stringResource(Res.string.streams_download_filter_hidden_count, hiddenCount),
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun DataSaverAllHiddenBlock(
+    hiddenCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Speed,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(Res.string.streams_download_filter_all_hidden_title),
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = stringResource(Res.string.streams_download_filter_all_hidden_message, hiddenCount),
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,

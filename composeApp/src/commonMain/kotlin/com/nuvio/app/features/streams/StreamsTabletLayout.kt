@@ -198,6 +198,8 @@ internal fun TabletStreamsLayout(
                             selectedFilter = uiState.selectedFilter,
                             onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                             onRefresh = onRefresh,
+                            downloadFilterMode = uiState.downloadFilterMode,
+                            onDownloadFilterModeSelected = { StreamsRepository.setDownloadFilterMode(it) },
                         )
 
                         ActiveScrapersStatusBlock(

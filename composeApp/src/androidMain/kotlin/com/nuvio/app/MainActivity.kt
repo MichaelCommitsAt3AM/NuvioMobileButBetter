@@ -20,6 +20,7 @@ import com.nuvio.app.features.collection.CollectionStorage
 import com.nuvio.app.features.debrid.DebridSettingsStorage
 import com.nuvio.app.features.downloads.DownloadsLiveStatusPlatform
 import com.nuvio.app.features.downloads.DownloadsPlatformDownloader
+import com.nuvio.app.features.downloads.DownloadFilterSettingsStorage
 import com.nuvio.app.features.downloads.DownloadsStorage
 import com.nuvio.app.features.library.LibraryStorage
 import com.nuvio.app.features.details.MetaScreenSettingsStorage
@@ -65,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private var pipRemoteActionReceiver: PipRemoteActionReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        PlayerDiskCache.purgeStaleCacheOnStartup(applicationContext)
         installSplashScreen()
         enableEdgeToEdge(
             navigationBarStyle = SystemBarStyle.dark(
@@ -116,6 +118,7 @@ class MainActivity : AppCompatActivity() {
         CollectionMobileSettingsStorage.initialize(applicationContext)
         CollectionStorage.initialize(applicationContext)
         DownloadsStorage.initialize(applicationContext)
+        DownloadFilterSettingsStorage.initialize(applicationContext)
         DownloadsPlatformDownloader.initialize(applicationContext)
         DownloadsLiveStatusPlatform.initialize(applicationContext)
         AndroidAppUpdaterPlatform.initialize(applicationContext)

@@ -733,6 +733,10 @@ object StreamsRepository {
         _uiState.update { it.copy(selectedFilter = addonId) }
     }
 
+    fun setDownloadFilterMode(mode: com.nuvio.app.features.downloads.DownloadStreamFilterMode) {
+        _uiState.update { it.copy(downloadFilterMode = mode) }
+    }
+
     fun consumeAutoPlay() {
         activeRequestKey = null
         _uiState.update {
