@@ -57,6 +57,22 @@ object DownloadFilterSettingsRepository {
         update(_uiState.value.copy(allowedSources = next))
     }
 
+    fun setMaxSizeBytes(bytes: Long) {
+        ensureLoaded()
+        val clamped = bytes.coerceIn(
+            DownloadFilterConfig.MIN_MAX_SIZE_BYTES,
+            DownloadFilterConfig.MAX_MAX_SIZE_BYTES,
+        )
+        if (_uiState.value.maxSizeBytes == clamped) return
+        update(_uiState.value.copy(maxSizeBytes = clamped))
+    }
+
+    fun setShowUnknownSizeStreams(enabled: Boolean) {
+        ensureLoaded()
+        if (_uiState.value.showUnknownSizeStreams == enabled) return
+        update(_uiState.value.copy(showUnknownSizeStreams = enabled))
+    }
+
     fun resetToDefaults() {
         ensureLoaded()
         if (_uiState.value == DownloadFilterConfig.DEFAULT) return

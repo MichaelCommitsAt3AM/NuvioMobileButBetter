@@ -31,6 +31,11 @@ import kotlinx.coroutines.launch
  * [onPlaybackStopped] track how many players are currently using the cache
  * and wipe it from disk after [IDLE_PURGE_DELAY_MS] once nothing is using it
  * anymore; [clearAll] wipes it immediately for a hard app-close.
+ *
+ * None of this is reachable if the OS kills the process outright (swipe-to-close
+ * on many OEM skins, or a low-memory kill, skip onDestroy entirely), so
+ * [purgeStaleCacheOnStartup] also wipes any cache left over from a previous
+ * process the very next time the app cold-starts, before any player can use it.
  */
 internal object PlayerDiskCache {
     private const val TAG = "PlayerDiskCache"
@@ -102,7 +107,13 @@ internal object PlayerDiskCache {
         }
     }
 
-    /** Immediately wipes all cached playback data from disk. Safe to call anytime, including on app close. */
+    /**
+     * Wipes all cached playback data. Safe to call anytime, including on app close.
+     * The (potentially slow, multi-GB) directory delete is dispatched to [purgeScope]
+     * rather than run inline, so this never blocks the caller's thread - notably
+     * important when called from `Activity.onDestroy()`, which the OS may only grant
+     * a short window to complete before killing the process.
+     */
     @Synchronized
     fun clearAll() {
         purgeJob?.cancel()
@@ -119,11 +130,24 @@ internal object PlayerDiskCache {
 
         val dir = appContext?.let { File(it.cacheDir, CACHE_DIR_NAME) }
         if (dir != null && dir.exists()) {
-            try {
-                dir.deleteRecursively()
-            } catch (e: Exception) {
-                Log.w(TAG, "Error deleting disk cache directory", e)
+            purgeScope.launch {
+                try {
+                    dir.deleteRecursively()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error deleting disk cache directory", e)
+                }
             }
         }
+    }
+
+    /**
+     * Wipes any cache left behind by a previous process that never got to run [clearAll]
+     * (force-killed via recents swipe on aggressive OEM skins, low-memory kill, crash, etc).
+     * Call once at app startup, before any player has requested the cache - at that point
+     * [cache] is always null, so this only ever needs to delete stale files from disk.
+     */
+    fun purgeStaleCacheOnStartup(context: Context) {
+        appContext = context.applicationContext
+        clearAll()
     }
 }

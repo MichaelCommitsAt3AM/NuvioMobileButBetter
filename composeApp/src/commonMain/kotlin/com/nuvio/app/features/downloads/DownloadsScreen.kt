@@ -14,11 +14,9 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,7 +39,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
-import com.nuvio.app.core.ui.NuvioToastController
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -50,6 +47,7 @@ fun DownloadsScreen(
     onBack: () -> Unit,
     onOpenDownload: (DownloadItem) -> Unit,
     initialShowId: String? = null,
+    initialShowFilterSettings: Boolean = false,
     onNavigateToShow: ((showId: String, title: String) -> Unit)? = null,
     onBackFromShow: (() -> Unit)? = null,
 ) {
@@ -59,12 +57,11 @@ fun DownloadsScreen(
     }.collectAsStateWithLifecycle()
 
     var selectedShowId by rememberSaveable(initialShowId) { mutableStateOf(initialShowId) }
-    var showFilterSettings by rememberSaveable { mutableStateOf(false) }
+    var showFilterSettings by rememberSaveable(initialShowFilterSettings) { mutableStateOf(initialShowFilterSettings) }
     val downloadFilterConfig by remember {
         DownloadFilterSettingsRepository.ensureLoaded()
         DownloadFilterSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
-    val openDownloadsDirectoryFailedText = stringResource(Res.string.downloads_open_directory_failed)
 
     val completedEpisodes = remember(uiState.items) {
         uiState.completedItems
@@ -99,18 +96,7 @@ fun DownloadsScreen(
                             Icon(
                                 imageVector = Icons.Rounded.Tune,
                                 contentDescription = stringResource(Res.string.download_filter_settings_title),
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                if (!DownloadsPlatformDownloader.openDownloadsDirectory()) {
-                                    NuvioToastController.show(openDownloadsDirectoryFailedText)
-                                }
-                            },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Folder,
-                                contentDescription = stringResource(Res.string.downloads_open_directory),
+                                tint = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }

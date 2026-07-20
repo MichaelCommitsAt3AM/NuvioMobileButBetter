@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -135,6 +136,7 @@ fun StreamsScreen(
         resumeProgressFraction: Float?,
     ) -> Unit = { _, _, _, _ -> },
     onBack: () -> Unit,
+    onOpenDownloadFilterSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val useNativeNavigation = LocalUseNativeNavigation.current
@@ -260,6 +262,7 @@ fun StreamsScreen(
                 },
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
                 onRefresh = reloadStreams,
+                onOpenDownloadFilterSettings = onOpenDownloadFilterSettings,
             )
         } else {
             MobileStreamsLayout(
@@ -280,6 +283,7 @@ fun StreamsScreen(
                 },
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
                 onRefresh = reloadStreams,
+                onOpenDownloadFilterSettings = onOpenDownloadFilterSettings,
             )
         }
 
@@ -470,6 +474,7 @@ private fun MobileStreamsLayout(
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     onRefresh: () -> Unit,
+    onOpenDownloadFilterSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -531,11 +536,25 @@ private fun MobileStreamsLayout(
                 }
 
                 Column(modifier = Modifier.fillMaxSize()) {
-                    if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
-                        ResumeBanner(
-                            positionMs = resumePositionMs,
-                            progressFraction = resumeProgressFraction,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
+                            ResumeBanner(
+                                positionMs = resumePositionMs,
+                                progressFraction = resumeProgressFraction,
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.width(0.dp))
+                        }
+                        DownloadFilterChip(
+                            mode = uiState.downloadFilterMode,
+                            onModeSelected = { StreamsRepository.setDownloadFilterMode(it) },
+                            onOpenFilterSettings = onOpenDownloadFilterSettings,
                         )
                     }
                     ProviderFilterRow(
@@ -543,8 +562,6 @@ private fun MobileStreamsLayout(
                         selectedFilter = uiState.selectedFilter,
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
-                        downloadFilterMode = uiState.downloadFilterMode,
-                        onDownloadFilterModeSelected = { StreamsRepository.setDownloadFilterMode(it) },
                     )
 
                     StreamList(
@@ -755,8 +772,6 @@ internal fun ProviderFilterRow(
     selectedFilter: String?,
     onFilterSelected: (String?) -> Unit,
     onRefresh: () -> Unit,
-    downloadFilterMode: DownloadStreamFilterMode,
-    onDownloadFilterModeSelected: (DownloadStreamFilterMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val addonGroups = groups.filter { it.streams.isNotEmpty() || it.isLoading }
@@ -773,10 +788,6 @@ internal fun ProviderFilterRow(
             contentDescription = stringResource(Res.string.streams_refresh),
             isSelected = false,
             onClick = onRefresh,
-        )
-        DownloadFilterChip(
-            mode = downloadFilterMode,
-            onModeSelected = onDownloadFilterModeSelected,
         )
         // "All" chip
         FilterChip(
@@ -801,6 +812,7 @@ private fun FilterChip(
     contentDescription: String? = null,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -836,10 +848,11 @@ private fun FilterChip(
             .height(36.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(containerColor)
-            .clickable(
+            .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
+                onLongClick = onLongClick,
             )
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
@@ -873,9 +886,10 @@ private fun FilterChip(
 }
 
 @Composable
-private fun DownloadFilterChip(
+internal fun DownloadFilterChip(
     mode: DownloadStreamFilterMode,
     onModeSelected: (DownloadStreamFilterMode) -> Unit,
+    onOpenFilterSettings: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
     val isDataSaver = mode == DownloadStreamFilterMode.DATA_SAVER
@@ -892,6 +906,7 @@ private fun DownloadFilterChip(
             contentDescription = stringResource(Res.string.streams_download_filter_label),
             isSelected = isDataSaver,
             onClick = { expanded = true },
+            onLongClick = onOpenFilterSettings,
         )
         DropdownMenu(
             expanded = expanded,

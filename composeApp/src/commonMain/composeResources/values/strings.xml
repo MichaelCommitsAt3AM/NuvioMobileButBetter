@@ -2021,9 +2021,9 @@
     <string name="streams_download_filter_label">Download filter</string>
     <string name="streams_download_filter_best_quality">Best quality</string>
     <string name="streams_download_filter_data_saver">Data saver</string>
-    <string name="streams_download_filter_hidden_count">%d streams hidden by Data Saver</string>
+    <string name="streams_download_filter_hidden_count">%1$d streams hidden by Data Saver</string>
     <string name="streams_download_filter_all_hidden_title">Everything filtered out</string>
-    <string name="streams_download_filter_all_hidden_message">Data Saver hid all %d streams for this title. Switch to Best quality or adjust your download filter.</string>
+    <string name="streams_download_filter_all_hidden_message">Data Saver hid all %1$d streams for this title. Switch to Best quality or adjust your download filter.</string>
     <string name="download_filter_settings_title">Download filter</string>
     <string name="download_filter_header_desc">Data Saver filters the streams list down to smaller, download-friendly files. Customize what counts as data-friendly below.</string>
     <string name="download_filter_section_resolution">Maximum resolution</string>
@@ -2043,4 +2043,9 @@
     <string name="download_filter_source_cam">Cam / TS</string>
     <string name="download_filter_source_bluray">Blu-ray</string>
     <string name="download_filter_source_remux">Remux</string>
+    <string name="download_filter_section_size">Maximum size</string>
+    <string name="download_filter_section_size_desc">Hide streams larger than this size while Data Saver is on.</string>
+    <string name="download_filter_size_value">Up to %1$d GB</string>
+    <string name="download_filter_unknown_size_title">Show streams with unknown size</string>
+    <string name="download_filter_unknown_size_desc">Off by default. When off, streams that don\'t report a file size are hidden while Data Saver is on.</string>
 </resources>

@@ -68,6 +68,7 @@ internal fun TabletStreamsLayout(
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     onRefresh: () -> Unit,
+    onOpenDownloadFilterSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val hazeState = rememberHazeState()
@@ -185,11 +186,25 @@ internal fun TabletStreamsLayout(
                             .fillMaxSize()
                             .padding(16.dp),
                     ) {
-                        if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
-                            ResumeBanner(
-                                positionMs = resumePositionMs,
-                                progressFraction = resumeProgressFraction,
-                                modifier = Modifier.padding(bottom = 8.dp),
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
+                                ResumeBanner(
+                                    positionMs = resumePositionMs,
+                                    progressFraction = resumeProgressFraction,
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.width(0.dp))
+                            }
+                            DownloadFilterChip(
+                                mode = uiState.downloadFilterMode,
+                                onModeSelected = { StreamsRepository.setDownloadFilterMode(it) },
+                                onOpenFilterSettings = onOpenDownloadFilterSettings,
                             )
                         }
 
@@ -198,8 +213,6 @@ internal fun TabletStreamsLayout(
                             selectedFilter = uiState.selectedFilter,
                             onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                             onRefresh = onRefresh,
-                            downloadFilterMode = uiState.downloadFilterMode,
-                            onDownloadFilterModeSelected = { StreamsRepository.setDownloadFilterMode(it) },
                         )
 
                         ActiveScrapersStatusBlock(

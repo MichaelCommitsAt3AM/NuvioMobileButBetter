@@ -52,13 +52,19 @@ enum class StreamSourceType {
 
 /**
  * User-customisable "data saver" rules. A stream passes when its detected
- * resolution is at most [maxResolution] and its detected source type is in
- * [allowedSources]. Undetected attributes always pass.
+ * resolution is at most [maxResolution], its detected source type is in
+ * [allowedSources], and its detected file size is at most [maxSizeBytes].
+ * Undetected resolution/source always pass; undetected size passes only when
+ * [showUnknownSizeStreams] is enabled, since size is the primary signal users
+ * rely on to gauge whether a download is "safe" and a silent unknown could
+ * otherwise sneak through as a huge file.
  */
 @Serializable
 data class DownloadFilterConfig(
     val maxResolution: StreamResolutionTier = StreamResolutionTier.FHD_1080,
     val allowedSources: Set<StreamSourceType> = DEFAULT_ALLOWED_SOURCES,
+    val maxSizeBytes: Long = DEFAULT_MAX_SIZE_BYTES,
+    val showUnknownSizeStreams: Boolean = false,
 ) {
     fun allows(stream: StreamItem): Boolean {
         val resolution = StreamQualityClassifier.resolutionOf(stream)
@@ -69,12 +75,22 @@ data class DownloadFilterConfig(
         if (source != StreamSourceType.UNKNOWN && source !in allowedSources) {
             return false
         }
+        val size = StreamQualityClassifier.sizeOf(stream)
+        if (size == null) {
+            if (!showUnknownSizeStreams) return false
+        } else if (size > maxSizeBytes) {
+            return false
+        }
         return true
     }
 
     companion object {
         val DEFAULT_ALLOWED_SOURCES: Set<StreamSourceType> =
             setOf(StreamSourceType.WEBDL, StreamSourceType.WEBRIP)
+
+        const val MIN_MAX_SIZE_BYTES: Long = 1L * 1024 * 1024 * 1024
+        const val MAX_MAX_SIZE_BYTES: Long = 20L * 1024 * 1024 * 1024
+        const val DEFAULT_MAX_SIZE_BYTES: Long = 8L * 1024 * 1024 * 1024
 
         val DEFAULT = DownloadFilterConfig()
     }
@@ -91,6 +107,15 @@ object StreamQualityClassifier {
 
     fun sourceTypeOf(stream: StreamItem): StreamSourceType =
         sourceTypeOf(haystack(stream))
+
+    /** Detected file size in bytes, or null if no addon reported one. */
+    fun sizeOf(stream: StreamItem): Long? {
+        val size = stream.behaviorHints.videoSize
+            ?: stream.clientResolve?.stream?.raw?.size
+            ?: stream.clientResolve?.stream?.raw?.folderSize
+            ?: stream.debridCacheStatus?.cachedSize
+        return size?.takeIf { it > 0L }
+    }
 
     internal fun resolutionOf(text: String): StreamResolutionTier = when {
         Regex("(2160p|\\b4k\\b|\\buhd\\b|\\b4320p|8k\\b)").containsMatchIn(text) -> StreamResolutionTier.UHD_4K

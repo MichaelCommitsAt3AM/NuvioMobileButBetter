@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,6 +21,7 @@ import com.nuvio.app.features.settings.SettingsGroup
 import com.nuvio.app.features.settings.SettingsGroupDivider
 import com.nuvio.app.features.settings.SettingsNavigationRow
 import com.nuvio.app.features.settings.SettingsSection
+import com.nuvio.app.features.settings.SettingsSwitchRow
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.download_filter_header_desc
 import nuvio.composeapp.generated.resources.download_filter_reset
@@ -30,8 +32,11 @@ import nuvio.composeapp.generated.resources.download_filter_resolution_480
 import nuvio.composeapp.generated.resources.download_filter_resolution_720
 import nuvio.composeapp.generated.resources.download_filter_section_resolution
 import nuvio.composeapp.generated.resources.download_filter_section_resolution_desc
+import nuvio.composeapp.generated.resources.download_filter_section_size
+import nuvio.composeapp.generated.resources.download_filter_section_size_desc
 import nuvio.composeapp.generated.resources.download_filter_section_sources
 import nuvio.composeapp.generated.resources.download_filter_section_sources_desc
+import nuvio.composeapp.generated.resources.download_filter_size_value
 import nuvio.composeapp.generated.resources.download_filter_source_bluray
 import nuvio.composeapp.generated.resources.download_filter_source_cam
 import nuvio.composeapp.generated.resources.download_filter_source_dvd
@@ -39,6 +44,8 @@ import nuvio.composeapp.generated.resources.download_filter_source_hdtv
 import nuvio.composeapp.generated.resources.download_filter_source_remux
 import nuvio.composeapp.generated.resources.download_filter_source_webdl
 import nuvio.composeapp.generated.resources.download_filter_source_webrip
+import nuvio.composeapp.generated.resources.download_filter_unknown_size_desc
+import nuvio.composeapp.generated.resources.download_filter_unknown_size_title
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -60,6 +67,10 @@ private val sourceOptions: List<StreamSourceType> = listOf(
     StreamSourceType.BLURAY,
     StreamSourceType.REMUX,
 )
+
+private const val BYTES_PER_GB = 1024L * 1024L * 1024L
+private val minSizeGb = (DownloadFilterConfig.MIN_MAX_SIZE_BYTES / BYTES_PER_GB).toInt()
+private val maxSizeGb = (DownloadFilterConfig.MAX_MAX_SIZE_BYTES / BYTES_PER_GB).toInt()
 
 internal fun LazyListScope.downloadFilterSettingsContent(
     config: DownloadFilterConfig,
@@ -121,6 +132,51 @@ internal fun LazyListScope.downloadFilterSettingsContent(
                         onClick = { DownloadFilterSettingsRepository.setSourceAllowed(source, !checked) },
                     )
                 }
+            }
+        }
+    }
+
+    item {
+        SettingsSection(
+            title = stringResource(Res.string.download_filter_section_size),
+            isTablet = isTablet,
+        ) {
+            Text(
+                text = stringResource(Res.string.download_filter_section_size_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            )
+            SettingsGroup(isTablet = isTablet) {
+                val currentGb = (config.maxSizeBytes / BYTES_PER_GB).toInt().coerceIn(minSizeGb, maxSizeGb)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.download_filter_size_value, currentGb),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Slider(
+                        value = currentGb.toFloat(),
+                        onValueChange = { value ->
+                            DownloadFilterSettingsRepository.setMaxSizeBytes(value.toLong() * BYTES_PER_GB)
+                        },
+                        valueRange = minSizeGb.toFloat()..maxSizeGb.toFloat(),
+                        steps = (maxSizeGb - minSizeGb - 1).coerceAtLeast(0),
+                    )
+                }
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.download_filter_unknown_size_title),
+                    description = stringResource(Res.string.download_filter_unknown_size_desc),
+                    checked = config.showUnknownSizeStreams,
+                    isTablet = isTablet,
+                    onCheckedChange = DownloadFilterSettingsRepository::setShowUnknownSizeStreams,
+                )
             }
         }
     }
