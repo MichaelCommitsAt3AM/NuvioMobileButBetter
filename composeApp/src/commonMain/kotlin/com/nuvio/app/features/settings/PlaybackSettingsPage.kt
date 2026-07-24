@@ -91,9 +91,7 @@ import kotlin.math.roundToInt
 internal fun LazyListScope.playbackSettingsContent(
     isTablet: Boolean,
     showLoadingOverlay: Boolean,
-    holdToSpeedEnabled: Boolean,
-    holdToSpeedValue: Float,
-    touchGesturesEnabled: Boolean,
+    onTouchControlsClick: () -> Unit,
     preferredAudioLanguage: String,
     secondaryPreferredAudioLanguage: String?,
     preferredSubtitleLanguage: String,
@@ -114,9 +112,7 @@ internal fun LazyListScope.playbackSettingsContent(
         PlaybackSettingsSection(
             isTablet = isTablet,
             showLoadingOverlay = showLoadingOverlay,
-            holdToSpeedEnabled = holdToSpeedEnabled,
-            holdToSpeedValue = holdToSpeedValue,
-            touchGesturesEnabled = touchGesturesEnabled,
+            onTouchControlsClick = onTouchControlsClick,
             preferredAudioLanguage = preferredAudioLanguage,
             secondaryPreferredAudioLanguage = secondaryPreferredAudioLanguage,
             preferredSubtitleLanguage = preferredSubtitleLanguage,
@@ -253,9 +249,7 @@ private fun subtitleColorLabel(color: Color): String {
 private fun PlaybackSettingsSection(
     isTablet: Boolean,
     showLoadingOverlay: Boolean,
-    holdToSpeedEnabled: Boolean,
-    holdToSpeedValue: Float,
-    touchGesturesEnabled: Boolean,
+    onTouchControlsClick: () -> Unit,
     preferredAudioLanguage: String,
     secondaryPreferredAudioLanguage: String?,
     preferredSubtitleLanguage: String,
@@ -286,7 +280,6 @@ private fun PlaybackSettingsSection(
     var showPlaybackEngineDialog by remember { mutableStateOf(false) }
     var showLibmpvVideoOutputDialog by remember { mutableStateOf(false) }
     var showDecoderPriorityDialog by remember { mutableStateOf(false) }
-    var showHoldToSpeedValueDialog by remember { mutableStateOf(false) }
     var showIosAudioOutputDialog by remember { mutableStateOf(false) }
     var showIosHardwareDecoderDialog by remember { mutableStateOf(false) }
     var showIosTargetPrimariesDialog by remember { mutableStateOf(false) }
@@ -386,32 +379,13 @@ private fun PlaybackSettingsSection(
                     )
                 }
                 SettingsGroupDivider(isTablet = isTablet)
-                SettingsSwitchRow(
+                SettingsNavigationRow(
                     title = stringResource(Res.string.settings_playback_touch_gestures),
                     description = stringResource(Res.string.settings_playback_touch_gestures_description),
-                    checked = touchGesturesEnabled,
                     enabled = !autoPlayPlayerSettings.externalPlayerEnabled,
                     isTablet = isTablet,
-                    onCheckedChange = PlayerSettingsRepository::setTouchGesturesEnabled,
+                    onClick = onTouchControlsClick,
                 )
-                SettingsGroupDivider(isTablet = isTablet)
-                SettingsSwitchRow(
-                    title = stringResource(Res.string.settings_playback_hold_to_speed),
-                    description = stringResource(Res.string.settings_playback_hold_to_speed_description),
-                    checked = holdToSpeedEnabled,
-                    enabled = !autoPlayPlayerSettings.externalPlayerEnabled,
-                    isTablet = isTablet,
-                    onCheckedChange = PlayerSettingsRepository::setHoldToSpeedEnabled,
-                )
-                if (holdToSpeedEnabled && !autoPlayPlayerSettings.externalPlayerEnabled) {
-                    SettingsGroupDivider(isTablet = isTablet)
-                    SettingsNavigationRow(
-                        title = stringResource(Res.string.settings_playback_hold_speed),
-                        description = formatPlaybackSpeedLabel(holdToSpeedValue),
-                        isTablet = isTablet,
-                        onClick = { showHoldToSpeedValueDialog = true },
-                    )
-                }
             }
         }
 
@@ -1369,17 +1343,6 @@ private fun PlaybackSettingsSection(
         )
     }
 
-    if (showHoldToSpeedValueDialog) {
-        HoldToSpeedValueDialog(
-            selectedSpeed = holdToSpeedValue,
-            onSpeedSelected = { speed ->
-                PlayerSettingsRepository.setHoldToSpeedValue(speed)
-                showHoldToSpeedValueDialog = false
-            },
-            onDismiss = { showHoldToSpeedValueDialog = false },
-        )
-    }
-
     if (showIosHardwareDecoderDialog) {
         IosEnumSelectionDialog(
             title = stringResource(Res.string.settings_playback_ios_hw_decoder_dialog),
@@ -2210,93 +2173,6 @@ private fun <T> IosEnumSelectionDialog(
                                         )
                                     }
                                 }
-                                Box(
-                                    modifier = Modifier.size(24.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(Res.string.settings_playback_dialog_close),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun HoldToSpeedValueDialog(
-    selectedSpeed: Float,
-    onSpeedSelected: (Float) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val options = listOf(1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
-
-    BasicAlertDialog(
-        onDismissRequest = onDismiss,
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = stringResource(Res.string.settings_playback_hold_speed),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    options.forEach { speed ->
-                        val isSelected = speed == selectedSpeed
-                        val containerColor = if (isSelected) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSpeedSelected(speed) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = containerColor,
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = formatPlaybackSpeedLabel(speed),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f),
-                                )
                                 Box(
                                     modifier = Modifier.size(24.dp),
                                     contentAlignment = Alignment.Center,

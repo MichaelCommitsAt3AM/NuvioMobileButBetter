@@ -23,7 +23,9 @@ internal data class PlayerSurfaceGestureCallbacks(
     val clearLiveGestureFeedback: State<() -> Unit>,
     val revealLockedOverlay: State<() -> Unit>,
     val isHoldToSpeedGestureActive: State<Boolean>,
-    val touchGesturesEnabled: State<Boolean>,
+    val gestureSwipeSeekEnabled: State<Boolean>,
+    val gestureBrightnessEnabled: State<Boolean>,
+    val gestureVolumeEnabled: State<Boolean>,
     val playerControlsLocked: State<Boolean>,
     val currentPositionMs: State<Long>,
     val currentDurationMs: State<Long>,
@@ -279,16 +281,20 @@ internal fun PlayerScreenRuntime.rememberSurfaceGestureCallbacks(): PlayerSurfac
             revealLockedOverlay()
             return@rememberUpdatedState
         }
-        if (!playerSettingsUiState.touchGesturesEnabled) {
-            controlsVisible = !controlsVisible
-            return@rememberUpdatedState
-        }
         when {
             offset.x < layoutSize.width * PlayerLeftGestureBoundary -> {
-                handleDoubleTapSeek(PlayerSeekDirection.Backward)
+                if (playerSettingsUiState.gestureDoubleTapSeekEnabled) {
+                    handleDoubleTapSeek(PlayerSeekDirection.Backward)
+                } else {
+                    controlsVisible = !controlsVisible
+                }
             }
             offset.x > layoutSize.width * PlayerRightGestureBoundary -> {
-                handleDoubleTapSeek(PlayerSeekDirection.Forward)
+                if (playerSettingsUiState.gestureDoubleTapSeekEnabled) {
+                    handleDoubleTapSeek(PlayerSeekDirection.Forward)
+                } else {
+                    controlsVisible = !controlsVisible
+                }
             }
             else -> controlsVisible = !controlsVisible
         }
@@ -304,7 +310,9 @@ internal fun PlayerScreenRuntime.rememberSurfaceGestureCallbacks(): PlayerSurfac
         clearLiveGestureFeedback = rememberUpdatedState(::clearLiveGestureFeedback),
         revealLockedOverlay = rememberUpdatedState(::revealLockedOverlay),
         isHoldToSpeedGestureActive = rememberUpdatedState(isHoldToSpeedGestureActive),
-        touchGesturesEnabled = rememberUpdatedState(playerSettingsUiState.touchGesturesEnabled),
+        gestureSwipeSeekEnabled = rememberUpdatedState(playerSettingsUiState.gestureSwipeSeekEnabled),
+        gestureBrightnessEnabled = rememberUpdatedState(playerSettingsUiState.gestureBrightnessEnabled),
+        gestureVolumeEnabled = rememberUpdatedState(playerSettingsUiState.gestureVolumeEnabled),
         playerControlsLocked = rememberUpdatedState(playerControlsLocked),
         currentPositionMs = rememberUpdatedState(playbackSnapshot.positionMs.coerceAtLeast(0L)),
         currentDurationMs = rememberUpdatedState(playbackSnapshot.durationMs),

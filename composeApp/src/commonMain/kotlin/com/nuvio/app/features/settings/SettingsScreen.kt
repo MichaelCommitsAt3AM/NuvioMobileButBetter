@@ -365,9 +365,6 @@ fun SettingsScreen(
                 onNavigateBack = ::navigateBack,
                 showInternalHeader = showInternalHeader,
                 showLoadingOverlay = playerSettingsUiState.showLoadingOverlay,
-                holdToSpeedEnabled = playerSettingsUiState.holdToSpeedEnabled,
-                holdToSpeedValue = playerSettingsUiState.holdToSpeedValue,
-                touchGesturesEnabled = playerSettingsUiState.touchGesturesEnabled,
                 preferredAudioLanguage = playerSettingsUiState.preferredAudioLanguage,
                 secondaryPreferredAudioLanguage = playerSettingsUiState.secondaryPreferredAudioLanguage,
                 preferredSubtitleLanguage = playerSettingsUiState.preferredSubtitleLanguage,
@@ -426,9 +423,6 @@ fun SettingsScreen(
                 onNavigateBack = ::navigateBack,
                 showInternalHeader = showInternalHeader,
                 showLoadingOverlay = playerSettingsUiState.showLoadingOverlay,
-                holdToSpeedEnabled = playerSettingsUiState.holdToSpeedEnabled,
-                holdToSpeedValue = playerSettingsUiState.holdToSpeedValue,
-                touchGesturesEnabled = playerSettingsUiState.touchGesturesEnabled,
                 preferredAudioLanguage = playerSettingsUiState.preferredAudioLanguage,
                 secondaryPreferredAudioLanguage = playerSettingsUiState.secondaryPreferredAudioLanguage,
                 preferredSubtitleLanguage = playerSettingsUiState.preferredSubtitleLanguage,
@@ -497,9 +491,6 @@ private fun MobileSettingsScreen(
     onNavigateBack: () -> Unit,
     showInternalHeader: Boolean,
     showLoadingOverlay: Boolean,
-    holdToSpeedEnabled: Boolean,
-    holdToSpeedValue: Float,
-    touchGesturesEnabled: Boolean,
     preferredAudioLanguage: String,
     secondaryPreferredAudioLanguage: String?,
     preferredSubtitleLanguage: String,
@@ -690,9 +681,7 @@ private fun MobileSettingsScreen(
                 SettingsPage.Playback -> playbackSettingsContent(
                     isTablet = false,
                     showLoadingOverlay = showLoadingOverlay,
-                    holdToSpeedEnabled = holdToSpeedEnabled,
-                    holdToSpeedValue = holdToSpeedValue,
-                    touchGesturesEnabled = touchGesturesEnabled,
+                    onTouchControlsClick = { onPageChange(SettingsPage.TouchControls) },
                     preferredAudioLanguage = preferredAudioLanguage,
                     secondaryPreferredAudioLanguage = secondaryPreferredAudioLanguage,
                     preferredSubtitleLanguage = preferredSubtitleLanguage,
@@ -708,6 +697,9 @@ private fun MobileSettingsScreen(
                     tunnelingEnabled = tunnelingEnabled,
                     useLibass = useLibass,
                     libassRenderType = libassRenderType,
+                )
+                SettingsPage.TouchControls -> touchControlsSettingsContent(
+                    isTablet = false,
                 )
                 SettingsPage.Streams -> streamsSettingsContent(
                     isTablet = false,
@@ -855,9 +847,6 @@ private fun TabletSettingsScreen(
     onNavigateBack: () -> Unit,
     showInternalHeader: Boolean,
     showLoadingOverlay: Boolean,
-    holdToSpeedEnabled: Boolean,
-    holdToSpeedValue: Float,
-    touchGesturesEnabled: Boolean,
     preferredAudioLanguage: String,
     secondaryPreferredAudioLanguage: String?,
     preferredSubtitleLanguage: String,
@@ -1104,9 +1093,7 @@ private fun TabletSettingsScreen(
                     SettingsPage.Playback -> playbackSettingsContent(
                         isTablet = true,
                         showLoadingOverlay = showLoadingOverlay,
-                        holdToSpeedEnabled = holdToSpeedEnabled,
-                        holdToSpeedValue = holdToSpeedValue,
-                        touchGesturesEnabled = touchGesturesEnabled,
+                        onTouchControlsClick = { openInlinePage(SettingsPage.TouchControls) },
                         preferredAudioLanguage = preferredAudioLanguage,
                         secondaryPreferredAudioLanguage = secondaryPreferredAudioLanguage,
                         preferredSubtitleLanguage = preferredSubtitleLanguage,
@@ -1122,6 +1109,9 @@ private fun TabletSettingsScreen(
                         tunnelingEnabled = tunnelingEnabled,
                         useLibass = useLibass,
                         libassRenderType = libassRenderType,
+                    )
+                    SettingsPage.TouchControls -> touchControlsSettingsContent(
+                        isTablet = true,
                     )
                     SettingsPage.Streams -> streamsSettingsContent(
                         isTablet = true,

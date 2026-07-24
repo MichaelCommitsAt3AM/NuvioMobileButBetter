@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Style
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -98,6 +99,7 @@ internal fun settingsSearchEntries(
     val contentDiscoveryPage = stringResource(Res.string.compose_settings_page_content_discovery)
     val downloadsPage = stringResource(Res.string.compose_settings_root_downloads_title)
     val playbackPage = stringResource(Res.string.compose_settings_page_playback)
+    val touchControlsPage = stringResource(Res.string.compose_settings_page_touch_controls)
     val streamsPage = stringResource(Res.string.compose_settings_page_streams)
     val integrationsPage = stringResource(Res.string.compose_settings_page_integrations)
     val notificationsPage = stringResource(Res.string.compose_settings_page_notifications)
@@ -242,6 +244,66 @@ internal fun settingsSearchEntries(
         title = playbackPage,
         description = stringResource(Res.string.settings_playback_subtitle),
         icon = Icons.Rounded.PlayArrow,
+    )
+    addPage(
+        page = SettingsPage.TouchControls,
+        key = "touch-controls",
+        title = touchControlsPage,
+        description = stringResource(Res.string.settings_playback_touch_gestures_description),
+        icon = Icons.Rounded.TouchApp,
+    )
+    addRow(
+        page = SettingsPage.TouchControls,
+        key = "touch-controls-double-tap-seek",
+        title = stringResource(Res.string.settings_touch_controls_double_tap_seek),
+        description = stringResource(Res.string.settings_touch_controls_double_tap_seek_description),
+        pageLabel = touchControlsPage,
+        section = stringResource(Res.string.settings_touch_controls_section_gestures),
+        icon = Icons.Rounded.TouchApp,
+    )
+    addRow(
+        page = SettingsPage.TouchControls,
+        key = "touch-controls-swipe-seek",
+        title = stringResource(Res.string.settings_touch_controls_swipe_seek),
+        description = stringResource(Res.string.settings_touch_controls_swipe_seek_description),
+        pageLabel = touchControlsPage,
+        section = stringResource(Res.string.settings_touch_controls_section_gestures),
+        icon = Icons.Rounded.TouchApp,
+    )
+    addRow(
+        page = SettingsPage.TouchControls,
+        key = "touch-controls-brightness",
+        title = stringResource(Res.string.settings_touch_controls_brightness),
+        description = stringResource(Res.string.settings_touch_controls_brightness_description),
+        pageLabel = touchControlsPage,
+        section = stringResource(Res.string.settings_touch_controls_section_gestures),
+        icon = Icons.Rounded.TouchApp,
+    )
+    addRow(
+        page = SettingsPage.TouchControls,
+        key = "touch-controls-volume",
+        title = stringResource(Res.string.settings_touch_controls_volume),
+        description = stringResource(Res.string.settings_touch_controls_volume_description),
+        pageLabel = touchControlsPage,
+        section = stringResource(Res.string.settings_touch_controls_section_gestures),
+        icon = Icons.Rounded.TouchApp,
+    )
+    addRow(
+        page = SettingsPage.TouchControls,
+        key = "hold-to-speed",
+        title = stringResource(Res.string.settings_playback_hold_to_speed),
+        description = stringResource(Res.string.settings_playback_hold_to_speed_description),
+        pageLabel = touchControlsPage,
+        section = stringResource(Res.string.settings_touch_controls_section_gestures),
+        icon = Icons.Rounded.TouchApp,
+    )
+    addRow(
+        page = SettingsPage.TouchControls,
+        key = "hold-speed",
+        title = stringResource(Res.string.settings_playback_hold_speed),
+        pageLabel = touchControlsPage,
+        section = stringResource(Res.string.settings_touch_controls_section_gestures),
+        icon = Icons.Rounded.TouchApp,
     )
     addPage(
         page = SettingsPage.Streams,
@@ -554,17 +616,6 @@ internal fun settingsSearchEntries(
                 "external-player-app",
                 stringResource(Res.string.settings_playback_external_player_app),
             ) else null,
-            PlaybackSearchRow(
-                "hold-to-speed",
-                stringResource(Res.string.settings_playback_hold_to_speed),
-                stringResource(Res.string.settings_playback_hold_to_speed_description),
-            ),
-            PlaybackSearchRow(
-                "touch-gestures",
-                stringResource(Res.string.settings_playback_touch_gestures),
-                stringResource(Res.string.settings_playback_touch_gestures_description),
-            ),
-            PlaybackSearchRow("hold-speed", stringResource(Res.string.settings_playback_hold_speed)),
         ),
     )
     addPlaybackRows(

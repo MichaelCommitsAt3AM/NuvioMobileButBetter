@@ -38,6 +38,10 @@ data class PlayerSettingsUiState(
     val holdToSpeedEnabled: Boolean = true,
     val holdToSpeedValue: Float = 2f,
     val touchGesturesEnabled: Boolean = true,
+    val gestureDoubleTapSeekEnabled: Boolean = true,
+    val gestureSwipeSeekEnabled: Boolean = true,
+    val gestureBrightnessEnabled: Boolean = true,
+    val gestureVolumeEnabled: Boolean = true,
     val externalPlayerEnabled: Boolean = false,
     val externalPlayerForwardSubtitles: Boolean = false,
     val externalPlayerSendSkipSegments: Boolean = false,
@@ -104,6 +108,10 @@ object PlayerSettingsRepository {
     private var holdToSpeedEnabled = true
     private var holdToSpeedValue = 2f
     private var touchGesturesEnabled = true
+    private var gestureDoubleTapSeekEnabled = true
+    private var gestureSwipeSeekEnabled = true
+    private var gestureBrightnessEnabled = true
+    private var gestureVolumeEnabled = true
     private var externalPlayerEnabled = false
     private var externalPlayerForwardSubtitles = false
     private var externalPlayerSendSkipSegments = false
@@ -175,6 +183,10 @@ object PlayerSettingsRepository {
         holdToSpeedEnabled = true
         holdToSpeedValue = 2f
         touchGesturesEnabled = true
+        gestureDoubleTapSeekEnabled = true
+        gestureSwipeSeekEnabled = true
+        gestureBrightnessEnabled = true
+        gestureVolumeEnabled = true
         externalPlayerEnabled = false
         externalPlayerForwardSubtitles = false
         externalPlayerSendSkipSegments = false
@@ -241,6 +253,10 @@ object PlayerSettingsRepository {
         holdToSpeedEnabled = PlayerSettingsStorage.loadHoldToSpeedEnabled() ?: true
         holdToSpeedValue = PlayerSettingsStorage.loadHoldToSpeedValue() ?: 2f
         touchGesturesEnabled = PlayerSettingsStorage.loadTouchGesturesEnabled() ?: true
+        gestureDoubleTapSeekEnabled = PlayerSettingsStorage.loadGestureDoubleTapSeekEnabled() ?: touchGesturesEnabled
+        gestureSwipeSeekEnabled = PlayerSettingsStorage.loadGestureSwipeSeekEnabled() ?: touchGesturesEnabled
+        gestureBrightnessEnabled = PlayerSettingsStorage.loadGestureBrightnessEnabled() ?: touchGesturesEnabled
+        gestureVolumeEnabled = PlayerSettingsStorage.loadGestureVolumeEnabled() ?: touchGesturesEnabled
         externalPlayerEnabled = PlayerSettingsStorage.loadExternalPlayerEnabled() ?: false
         externalPlayerForwardSubtitles = PlayerSettingsStorage.loadExternalPlayerForwardSubtitles() ?: false
         externalPlayerSendSkipSegments = PlayerSettingsStorage.loadExternalPlayerSendSkipSegments() ?: false
@@ -413,6 +429,38 @@ object PlayerSettingsRepository {
         touchGesturesEnabled = enabled
         publish()
         PlayerSettingsStorage.saveTouchGesturesEnabled(enabled)
+    }
+
+    fun setGestureDoubleTapSeekEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (gestureDoubleTapSeekEnabled == enabled) return
+        gestureDoubleTapSeekEnabled = enabled
+        publish()
+        PlayerSettingsStorage.saveGestureDoubleTapSeekEnabled(enabled)
+    }
+
+    fun setGestureSwipeSeekEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (gestureSwipeSeekEnabled == enabled) return
+        gestureSwipeSeekEnabled = enabled
+        publish()
+        PlayerSettingsStorage.saveGestureSwipeSeekEnabled(enabled)
+    }
+
+    fun setGestureBrightnessEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (gestureBrightnessEnabled == enabled) return
+        gestureBrightnessEnabled = enabled
+        publish()
+        PlayerSettingsStorage.saveGestureBrightnessEnabled(enabled)
+    }
+
+    fun setGestureVolumeEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (gestureVolumeEnabled == enabled) return
+        gestureVolumeEnabled = enabled
+        publish()
+        PlayerSettingsStorage.saveGestureVolumeEnabled(enabled)
     }
 
     fun setExternalPlayerEnabled(enabled: Boolean) {
@@ -916,6 +964,10 @@ object PlayerSettingsRepository {
             holdToSpeedEnabled = holdToSpeedEnabled,
             holdToSpeedValue = holdToSpeedValue,
             touchGesturesEnabled = touchGesturesEnabled,
+            gestureDoubleTapSeekEnabled = gestureDoubleTapSeekEnabled,
+            gestureSwipeSeekEnabled = gestureSwipeSeekEnabled,
+            gestureBrightnessEnabled = gestureBrightnessEnabled,
+            gestureVolumeEnabled = gestureVolumeEnabled,
             externalPlayerEnabled = externalPlayerEnabled,
             externalPlayerForwardSubtitles = externalPlayerForwardSubtitles,
             externalPlayerSendSkipSegments = externalPlayerSendSkipSegments,

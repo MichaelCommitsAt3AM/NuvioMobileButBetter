@@ -102,7 +102,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 layoutSize = layoutSize,
                 sideGestureSystemEdgeExclusionPx = sideGestureSystemEdgeExclusionPx,
                 playerControlsLockedState = gestureCallbacks.playerControlsLocked,
-                touchGesturesEnabledState = gestureCallbacks.touchGesturesEnabled,
+                gestureSwipeSeekEnabledState = gestureCallbacks.gestureSwipeSeekEnabled,
+                gestureBrightnessEnabledState = gestureCallbacks.gestureBrightnessEnabled,
+                gestureVolumeEnabledState = gestureCallbacks.gestureVolumeEnabled,
                 isHoldToSpeedGestureActiveState = gestureCallbacks.isHoldToSpeedGestureActive,
                 currentPositionMsState = gestureCallbacks.currentPositionMs,
                 currentDurationMsState = gestureCallbacks.currentDurationMs,
@@ -182,6 +184,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             showP2pRebufferStats = showP2pRebufferStats,
             p2pRebufferMessage = p2pRebufferMessage,
             p2pRebufferProgress = p2pRebufferProgress,
+            isInPip = isInPip,
         )
         RenderPlayerModals(displayedPositionMs = displayedPositionMs)
     }
@@ -305,6 +308,7 @@ private fun BoxScope.RenderPlaybackOverlays(
     showP2pRebufferStats: Boolean,
     p2pRebufferMessage: String?,
     p2pRebufferProgress: Float?,
+    isInPip: Boolean,
 ) {
     runtime.run {
         PlayerPlaybackOverlays(
@@ -360,6 +364,9 @@ private fun BoxScope.RenderPlaybackOverlays(
             nextEpisodeAutoPlaySourceName = null
             nextEpisodeAutoPlayCountdown = null
         },
+        isBuffering = playbackSnapshot.isLoading,
+        isInPip = isInPip,
+        onTogglePlayback = { togglePlayback() },
         errorMessage = errorMessage,
             onDismissError = {
                 flushWatchProgress()

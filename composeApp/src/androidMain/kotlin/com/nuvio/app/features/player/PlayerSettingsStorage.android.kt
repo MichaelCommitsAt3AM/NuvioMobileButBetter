@@ -25,6 +25,10 @@ actual object PlayerSettingsStorage {
     private const val holdToSpeedEnabledKey = "hold_to_speed_enabled"
     private const val holdToSpeedValueKey = "hold_to_speed_value"
     private const val touchGesturesEnabledKey = "touch_gestures_enabled"
+    private const val gestureDoubleTapSeekEnabledKey = "gesture_double_tap_seek_enabled"
+    private const val gestureSwipeSeekEnabledKey = "gesture_swipe_seek_enabled"
+    private const val gestureBrightnessEnabledKey = "gesture_brightness_enabled"
+    private const val gestureVolumeEnabledKey = "gesture_volume_enabled"
     private const val externalPlayerEnabledKey = "external_player_enabled"
     private const val externalPlayerForwardSubtitlesKey = "external_player_forward_subtitles"
     private const val externalPlayerSendSkipSegmentsKey = "external_player_send_skip_segments"
@@ -94,6 +98,10 @@ actual object PlayerSettingsStorage {
         holdToSpeedEnabledKey,
         holdToSpeedValueKey,
         touchGesturesEnabledKey,
+        gestureDoubleTapSeekEnabledKey,
+        gestureSwipeSeekEnabledKey,
+        gestureBrightnessEnabledKey,
+        gestureVolumeEnabledKey,
         externalPlayerEnabledKey,
         externalPlayerForwardSubtitlesKey,
         externalPlayerSendSkipSegmentsKey,
@@ -254,6 +262,58 @@ actual object PlayerSettingsStorage {
         preferences
             ?.edit()
             ?.putBoolean(ProfileScopedKey.of(touchGesturesEnabledKey), enabled)
+            ?.apply()
+    }
+
+    actual fun loadGestureDoubleTapSeekEnabled(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(gestureDoubleTapSeekEnabledKey)
+            if (sharedPreferences.contains(key)) sharedPreferences.getBoolean(key, true) else null
+        }
+
+    actual fun saveGestureDoubleTapSeekEnabled(enabled: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(gestureDoubleTapSeekEnabledKey), enabled)
+            ?.apply()
+    }
+
+    actual fun loadGestureSwipeSeekEnabled(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(gestureSwipeSeekEnabledKey)
+            if (sharedPreferences.contains(key)) sharedPreferences.getBoolean(key, true) else null
+        }
+
+    actual fun saveGestureSwipeSeekEnabled(enabled: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(gestureSwipeSeekEnabledKey), enabled)
+            ?.apply()
+    }
+
+    actual fun loadGestureBrightnessEnabled(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(gestureBrightnessEnabledKey)
+            if (sharedPreferences.contains(key)) sharedPreferences.getBoolean(key, true) else null
+        }
+
+    actual fun saveGestureBrightnessEnabled(enabled: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(gestureBrightnessEnabledKey), enabled)
+            ?.apply()
+    }
+
+    actual fun loadGestureVolumeEnabled(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(gestureVolumeEnabledKey)
+            if (sharedPreferences.contains(key)) sharedPreferences.getBoolean(key, true) else null
+        }
+
+    actual fun saveGestureVolumeEnabled(enabled: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(gestureVolumeEnabledKey), enabled)
             ?.apply()
     }
 
@@ -1079,6 +1139,10 @@ actual object PlayerSettingsStorage {
         loadHoldToSpeedEnabled()?.let { put(holdToSpeedEnabledKey, encodeSyncBoolean(it)) }
         loadHoldToSpeedValue()?.let { put(holdToSpeedValueKey, encodeSyncFloat(it)) }
         loadTouchGesturesEnabled()?.let { put(touchGesturesEnabledKey, encodeSyncBoolean(it)) }
+        loadGestureDoubleTapSeekEnabled()?.let { put(gestureDoubleTapSeekEnabledKey, encodeSyncBoolean(it)) }
+        loadGestureSwipeSeekEnabled()?.let { put(gestureSwipeSeekEnabledKey, encodeSyncBoolean(it)) }
+        loadGestureBrightnessEnabled()?.let { put(gestureBrightnessEnabledKey, encodeSyncBoolean(it)) }
+        loadGestureVolumeEnabled()?.let { put(gestureVolumeEnabledKey, encodeSyncBoolean(it)) }
         loadExternalPlayerEnabled()?.let { put(externalPlayerEnabledKey, encodeSyncBoolean(it)) }
         loadExternalPlayerForwardSubtitles()?.let { put(externalPlayerForwardSubtitlesKey, encodeSyncBoolean(it)) }
         loadExternalPlayerSendSkipSegments()?.let { put(externalPlayerSendSkipSegmentsKey, encodeSyncBoolean(it)) }
@@ -1154,6 +1218,10 @@ actual object PlayerSettingsStorage {
         payload.decodeSyncBoolean(holdToSpeedEnabledKey)?.let(::saveHoldToSpeedEnabled)
         payload.decodeSyncFloat(holdToSpeedValueKey)?.let(::saveHoldToSpeedValue)
         payload.decodeSyncBoolean(touchGesturesEnabledKey)?.let(::saveTouchGesturesEnabled)
+        payload.decodeSyncBoolean(gestureDoubleTapSeekEnabledKey)?.let(::saveGestureDoubleTapSeekEnabled)
+        payload.decodeSyncBoolean(gestureSwipeSeekEnabledKey)?.let(::saveGestureSwipeSeekEnabled)
+        payload.decodeSyncBoolean(gestureBrightnessEnabledKey)?.let(::saveGestureBrightnessEnabled)
+        payload.decodeSyncBoolean(gestureVolumeEnabledKey)?.let(::saveGestureVolumeEnabled)
         payload.decodeSyncBoolean(externalPlayerEnabledKey)?.let(::saveExternalPlayerEnabled)
         payload.decodeSyncBoolean(externalPlayerForwardSubtitlesKey)?.let(::saveExternalPlayerForwardSubtitles)
         payload.decodeSyncBoolean(externalPlayerSendSkipSegmentsKey)?.let(::saveExternalPlayerSendSkipSegments)

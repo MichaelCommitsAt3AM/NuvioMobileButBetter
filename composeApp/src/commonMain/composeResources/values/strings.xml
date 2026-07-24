@@ -435,6 +435,7 @@
     <string name="compose_settings_page_streams">Streams</string>
     <string name="compose_settings_page_supporters_contributors">Supporters &amp; Contributors</string>
     <string name="compose_settings_page_tmdb_enrichment">TMDB Enrichment</string>
+    <string name="compose_settings_page_touch_controls">Touch Controls</string>
     <string name="compose_settings_page_trakt">Trakt</string>
     <string name="compose_settings_root_about_section">ABOUT</string>
     <string name="compose_settings_root_account_description">Account and sync status</string>
@@ -932,8 +933,17 @@
     <string name="settings_playback_hold_speed">Hold Speed</string>
     <string name="settings_playback_hold_to_speed">Hold To Speed</string>
     <string name="settings_playback_hold_to_speed_description">Long-press anywhere on the player surface to temporarily boost playback speed.</string>
-    <string name="settings_playback_touch_gestures">Touch Gestures</string>
-    <string name="settings_playback_touch_gestures_description">Allow swipes and double-taps on the player surface to seek, adjust brightness, or adjust volume.</string>
+    <string name="settings_playback_touch_gestures">Touch Controls</string>
+    <string name="settings_playback_touch_gestures_description">Choose which swipes and double-taps are active on the player surface.</string>
+    <string name="settings_touch_controls_section_gestures">GESTURES</string>
+    <string name="settings_touch_controls_double_tap_seek">Double-Tap to Seek</string>
+    <string name="settings_touch_controls_double_tap_seek_description">Double-tap the left or right side of the player to seek 10 seconds back or forward.</string>
+    <string name="settings_touch_controls_swipe_seek">Swipe to Seek</string>
+    <string name="settings_touch_controls_swipe_seek_description">Swipe left or right anywhere on the player to scrub through the video.</string>
+    <string name="settings_touch_controls_brightness">Swipe for Brightness</string>
+    <string name="settings_touch_controls_brightness_description">Swipe up or down on the left side of the player to adjust screen brightness.</string>
+    <string name="settings_touch_controls_volume">Swipe for Volume</string>
+    <string name="settings_touch_controls_volume_description">Swipe up or down on the right side of the player to adjust volume.</string>
     <string name="settings_playback_invalid_regex_pattern">Invalid regex pattern</string>
     <string name="settings_playback_last_link_cache_duration">Last Link Cache Duration</string>
     <string name="settings_playback_map_dv7_to_hevc">DV7 - HEVC Fallback</string>

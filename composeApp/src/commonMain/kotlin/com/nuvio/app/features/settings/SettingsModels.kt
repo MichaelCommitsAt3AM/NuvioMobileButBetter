@@ -30,6 +30,7 @@ import nuvio.composeapp.generated.resources.compose_settings_page_root
 import nuvio.composeapp.generated.resources.compose_settings_page_streams
 import nuvio.composeapp.generated.resources.compose_settings_page_supporters_contributors
 import nuvio.composeapp.generated.resources.compose_settings_page_tmdb_enrichment
+import nuvio.composeapp.generated.resources.compose_settings_page_touch_controls
 import nuvio.composeapp.generated.resources.compose_settings_page_trakt
 import nuvio.composeapp.generated.resources.settings_account
 import org.jetbrains.compose.resources.StringResource
@@ -73,6 +74,11 @@ internal enum class SettingsPage(
         titleRes = Res.string.compose_settings_page_playback,
         category = SettingsCategory.General,
         parentPage = Root,
+    ),
+    TouchControls(
+        titleRes = Res.string.compose_settings_page_touch_controls,
+        category = SettingsCategory.General,
+        parentPage = Playback,
     ),
     Appearance(
         titleRes = Res.string.compose_settings_page_appearance,

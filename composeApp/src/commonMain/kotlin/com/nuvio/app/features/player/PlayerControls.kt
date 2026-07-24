@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.VideoLibrary
-import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -395,29 +394,36 @@ private fun CenterControls(
     onTogglePlayback: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // YouTube-style seeking: the ±10s buttons are replaced by double-tap-to-seek
+    // on the video surface (see PlayerScreenRuntimeGestureActions.handleDoubleTapSeek).
+    // Kept here, commented out, in case on-screen seek buttons need to come back.
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(metrics.centerGap),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SideControlButton(
-            icon = Icons.Rounded.Replay10,
-            contentDescription = stringResource(Res.string.compose_player_seek_back_10),
-            metrics = metrics,
-            onClick = onSeekBack,
-        )
-        PlayPauseControlButton(
-            isPlaying = snapshot.isPlaying,
-            isBuffering = snapshot.isLoading,
-            metrics = metrics,
-            onClick = onTogglePlayback,
-        )
-        SideControlButton(
-            icon = Icons.Rounded.Forward10,
-            contentDescription = stringResource(Res.string.compose_player_seek_forward_10),
-            metrics = metrics,
-            onClick = onSeekForward,
-        )
+        // SideControlButton(
+        //     icon = Icons.Rounded.Replay10,
+        //     contentDescription = stringResource(Res.string.compose_player_seek_back_10),
+        //     metrics = metrics,
+        //     onClick = onSeekBack,
+        // )
+        // While buffering, the independent spinner in PlayerPlaybackOverlays occupies this
+        // exact spot (so it stays visible even after controls auto-hide); skip the icon here
+        // to avoid the two overlapping.
+        if (!snapshot.isLoading) {
+            PlayPauseControlButton(
+                isPlaying = snapshot.isPlaying,
+                metrics = metrics,
+                onClick = onTogglePlayback,
+            )
+        }
+        // SideControlButton(
+        //     icon = Icons.Rounded.Forward10,
+        //     contentDescription = stringResource(Res.string.compose_player_seek_forward_10),
+        //     metrics = metrics,
+        //     onClick = onSeekForward,
+        // )
     }
 }
 
@@ -447,7 +453,6 @@ private fun SideControlButton(
 @Composable
 private fun PlayPauseControlButton(
     isPlaying: Boolean,
-    isBuffering: Boolean,
     metrics: PlayerLayoutMetrics,
     onClick: () -> Unit,
 ) {
@@ -462,23 +467,16 @@ private fun PlayPauseControlButton(
             .padding(metrics.playButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
-        if (isBuffering) {
-            NuvioLoadingIndicator(
-                color = Color.White,
-                modifier = Modifier.size(metrics.playIconSize),
-            )
-        } else {
-            Icon(
-                painter = playPausePainter,
-                contentDescription = if (isPlaying) {
-                    stringResource(Res.string.compose_action_pause)
-                } else {
-                    stringResource(Res.string.detail_btn_play)
-                },
-                tint = Color.White,
-                modifier = Modifier.size(metrics.playIconSize),
-            )
-        }
+        Icon(
+            painter = playPausePainter,
+            contentDescription = if (isPlaying) {
+                stringResource(Res.string.compose_action_pause)
+            } else {
+                stringResource(Res.string.detail_btn_play)
+            },
+            tint = Color.White,
+            modifier = Modifier.size(metrics.playIconSize),
+        )
     }
 }
 

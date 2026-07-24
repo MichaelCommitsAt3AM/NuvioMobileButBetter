@@ -10,6 +10,8 @@ import android.util.Log
 import android.util.TypedValue
 import android.graphics.Typeface
 import android.os.Build
+import android.view.View
+import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.util.AttributeSet
 import androidx.compose.runtime.getValue
@@ -169,6 +171,26 @@ private fun AndroidPlaybackEngine.initialAndroidEngine(): ResolvedAndroidPlaybac
         AndroidPlaybackEngine.ExoPlayer -> ResolvedAndroidPlaybackEngine.ExoPlayer
         AndroidPlaybackEngine.Libmpv -> ResolvedAndroidPlaybackEngine.Libmpv
     }
+
+/**
+ * PlayerView always wires a click listener onto its internal content frame (to toggle its own
+ * native controller), which leaves that view - and every ancestor traversal Android does for touch
+ * dispatch - marked as consuming touches even when [PlayerView.useController] is false. That silently
+ * swallows the touch stream before it ever reaches the Compose gesture detectors layered on the
+ * surrounding Box (double-tap seek, swipe brightness/volume, tap to show/hide controls). Stripping the
+ * clickable/focusable flags from the whole view tree makes PlayerView a pure video sink so those
+ * gestures reach Compose instead.
+ */
+private fun View.disableTouchConsumption() {
+    isClickable = false
+    isLongClickable = false
+    isFocusable = false
+    if (this is ViewGroup) {
+        for (i in 0 until childCount) {
+            getChildAt(i).disableTouchConsumption()
+        }
+    }
+}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -798,6 +820,7 @@ private fun ExoPlayerSurface(
                     renderType = libassRenderType,
                 )
                 applySubtitleStyle(currentSubtitleStyle, pipSubtitleScale)
+                if (!useNativeController) disableTouchConsumption()
             }
         },
         update = { playerView ->
@@ -812,6 +835,7 @@ private fun ExoPlayerSurface(
                 renderType = libassRenderType,
             )
             playerView.applySubtitleStyle(currentSubtitleStyle, pipSubtitleScale)
+            if (!useNativeController) playerView.disableTouchConsumption()
         },
     )
 }

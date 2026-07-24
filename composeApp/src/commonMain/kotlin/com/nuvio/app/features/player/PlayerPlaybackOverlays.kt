@@ -3,6 +3,7 @@ package com.nuvio.app.features.player
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -11,12 +12,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import com.nuvio.app.features.p2p.P2pLoadingStatus
 import com.nuvio.app.features.player.skip.NextEpisodeCard
 import com.nuvio.app.features.player.skip.NextEpisodeInfo
@@ -61,6 +67,9 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     nextEpisodeAutoPlayCountdown: Int?,
     onPlayNextEpisode: () -> Unit,
     onDismissNextEpisode: () -> Unit,
+    isBuffering: Boolean,
+    isInPip: Boolean,
+    onTogglePlayback: () -> Unit,
     errorMessage: String?,
     onDismissError: () -> Unit,
 ) {
@@ -104,6 +113,28 @@ internal fun BoxScope.PlayerPlaybackOverlays(
             .align(Alignment.Center)
             .padding(top = 58.dp),
     )
+
+    // Moved out of the controls overlay (which hides after `controlsVisible` goes false) so the
+    // spinner keeps showing during a rebuffer even while the on-screen controls are auto-hidden.
+    // Mirrors the exact box/click/size the play/pause button used to render this in-place.
+    // Suppressed during the initial opening overlay (logo/artwork) since that screen already
+    // has its own loading treatment and this would otherwise overlap the title logo.
+    if (isBuffering && initialLoadCompleted && !playerControlsLocked && !isInPip) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(bottom = metrics.centerLift)
+                .clip(CircleShape)
+                .clickable(onClick = onTogglePlayback)
+                .padding(metrics.playButtonPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            NuvioLoadingIndicator(
+                color = Color.White,
+                modifier = Modifier.size(metrics.playIconSize),
+            )
+        }
+    }
 
     AnimatedVisibility(
         visible = currentGestureFeedback != null,

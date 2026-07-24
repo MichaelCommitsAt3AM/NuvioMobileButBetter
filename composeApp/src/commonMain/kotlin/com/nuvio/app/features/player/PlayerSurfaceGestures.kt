@@ -43,7 +43,9 @@ internal fun Modifier.playerSurfaceDragGestures(
     layoutSize: IntSize,
     sideGestureSystemEdgeExclusionPx: Float,
     playerControlsLockedState: State<Boolean>,
-    touchGesturesEnabledState: State<Boolean>,
+    gestureSwipeSeekEnabledState: State<Boolean>,
+    gestureBrightnessEnabledState: State<Boolean>,
+    gestureVolumeEnabledState: State<Boolean>,
     isHoldToSpeedGestureActiveState: State<Boolean>,
     currentPositionMsState: State<Long>,
     currentDurationMsState: State<Long>,
@@ -67,7 +69,10 @@ internal fun Modifier.playerSurfaceDragGestures(
                 }
                 return@awaitEachGesture
             }
-            if (!touchGesturesEnabledState.value) {
+            val swipeSeekEnabled = gestureSwipeSeekEnabledState.value
+            val brightnessEnabled = gestureBrightnessEnabledState.value
+            val volumeEnabled = gestureVolumeEnabledState.value
+            if (!swipeSeekEnabled && !brightnessEnabled && !volumeEnabled) {
                 return@awaitEachGesture
             }
             val controller = gestureController
@@ -80,8 +85,12 @@ internal fun Modifier.playerSurfaceDragGestures(
                     down.position.y >= height - sideGestureEdgeExclusionPx
             val region = when {
                 isInSideGestureSystemEdge -> null
-                down.position.x < width * PlayerLeftGestureBoundary -> PlayerSideGesture.Brightness
-                down.position.x > width * PlayerRightGestureBoundary -> PlayerSideGesture.Volume
+                down.position.x < width * PlayerLeftGestureBoundary -> {
+                    PlayerSideGesture.Brightness.takeIf { brightnessEnabled }
+                }
+                down.position.x > width * PlayerRightGestureBoundary -> {
+                    PlayerSideGesture.Volume.takeIf { volumeEnabled }
+                }
                 else -> null
             }
 
@@ -120,6 +129,7 @@ internal fun Modifier.playerSurfaceDragGestures(
                     )
                     val horizontalDominant =
                         !holdToSpeedActive &&
+                            swipeSeekEnabled &&
                             abs(totalDx) > viewConfiguration.touchSlop &&
                             abs(totalDx) > abs(totalDy)
                     val verticalDominant =
