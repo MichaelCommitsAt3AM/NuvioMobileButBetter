@@ -42,10 +42,6 @@ val releaseAppVersionName = readXcconfigValue(appVersionConfigFile, "MARKETING_V
 val releaseAppVersionCode = readXcconfigValue(appVersionConfigFile, "CURRENT_PROJECT_VERSION")
     ?.toIntOrNull()
     ?: error("CURRENT_PROJECT_VERSION is missing or invalid in ${appVersionConfigFile.path}")
-val requestedTaskNames = gradle.startParameter.taskNames.map { it.substringAfterLast(':') }
-val buildsReleaseApks = requestedTaskNames.any {
-    it.startsWith("assemble", ignoreCase = true) && it.endsWith("Release", ignoreCase = true)
-}
 
 android {
     namespace = "com.nuvio.android"
@@ -104,7 +100,7 @@ android {
 
     splits {
         abi {
-            isEnable = buildsReleaseApks
+            isEnable = false
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
             isUniversalApk = false
