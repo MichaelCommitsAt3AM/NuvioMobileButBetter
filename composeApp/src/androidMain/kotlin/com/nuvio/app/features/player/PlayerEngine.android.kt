@@ -97,6 +97,7 @@ actual fun PlatformPlayerSurface(
     playWhenReady: Boolean,
     resizeMode: PlayerResizeMode,
     useNativeController: Boolean,
+    initialPositionMs: Long,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
@@ -130,6 +131,7 @@ actual fun PlatformPlayerSurface(
             playWhenReady = playWhenReady,
             resizeMode = resizeMode,
             useNativeController = useNativeController,
+            initialPositionMs = initialPositionMs,
             onControllerReady = onControllerReady,
             onSnapshot = onSnapshot,
             onError = { message ->
@@ -153,6 +155,7 @@ actual fun PlatformPlayerSurface(
             videoOutput = playerSettings.androidLibmpvVideoOutput,
             hardwareDecodingEnabled = playerSettings.androidLibmpvHardwareDecodingEnabled,
             yuv420pEnabled = playerSettings.androidLibmpvYuv420pEnabled,
+            initialPositionMs = initialPositionMs,
             onControllerReady = onControllerReady,
             onSnapshot = onSnapshot,
             onError = onError,
@@ -192,6 +195,22 @@ private fun View.disableTouchConsumption() {
     }
 }
 
+/**
+ * ExoPlayer can mark the video renderer "ready" (and let the shared playback clock advance,
+ * unblocking audio output) before it has actually rendered the frame at a seek target -
+ * worst on exact seeks into content with sparse keyframes, but not limited to that case (see
+ * https://github.com/androidx/media/issues/2957, where the same symptom persisted even with
+ * SeekParameters.CLOSEST_SYNC). That produces a frozen video surface while audio plays ahead
+ * at the seek target until the decoder catches up. [SeekRenderGate] tracks an in-flight seek so
+ * playback can be explicitly withheld until [androidx.media3.common.Player.Listener.onRenderedFirstFrame]
+ * confirms the video is actually showing the right frame, at which point audio+video resume together.
+ */
+private class SeekRenderGate {
+    var awaitingFirstFrame: Boolean = false
+    var resumePlayWhenReady: Boolean = false
+    var timeoutJob: Job? = null
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 private fun ExoPlayerSurface(
@@ -206,6 +225,7 @@ private fun ExoPlayerSurface(
     playWhenReady: Boolean,
     resizeMode: PlayerResizeMode,
     useNativeController: Boolean,
+    initialPositionMs: Long,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
@@ -400,27 +420,95 @@ private fun ExoPlayerSurface(
         player
     }
 
+    val seekGate = remember { SeekRenderGate() }
+
+    fun hasSelectedVideoTrack(): Boolean =
+        exoPlayer.currentTracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+
+    // Arms (or re-arms) the seek-render gate: playback is withheld until onRenderedFirstFrame
+    // confirms the video actually caught up to where we told it to be, or the timeout below
+    // fires as a safety net. Shared by explicit seeks (gatedSeekTo) and the cold-start-at-offset
+    // path (initial prepare with a resume position), which has the same audio-ahead-of-video race.
+    fun armSeekGate(desiredPlayWhenReady: Boolean) {
+        seekGate.awaitingFirstFrame = true
+        seekGate.resumePlayWhenReady = desiredPlayWhenReady
+        seekGate.timeoutJob?.cancel()
+        seekGate.timeoutJob = coroutineScope.launch {
+            delay(2_500L)
+            if (seekGate.awaitingFirstFrame) {
+                Log.w(TAG, "armSeekGate: onRenderedFirstFrame timed out, resuming anyway")
+                seekGate.awaitingFirstFrame = false
+                if (seekGate.resumePlayWhenReady) exoPlayer.playWhenReady = true
+            }
+        }
+    }
+
+    fun gatedSeekTo(positionMs: Long) {
+        val target = positionMs.coerceAtLeast(0L)
+        if (hasSelectedVideoTrack()) {
+            val desiredPlayWhenReady = if (seekGate.awaitingFirstFrame) {
+                seekGate.resumePlayWhenReady
+            } else {
+                exoPlayer.playWhenReady
+            }
+            armSeekGate(desiredPlayWhenReady)
+            if (exoPlayer.playWhenReady) exoPlayer.playWhenReady = false
+        }
+        exoPlayer.seekTo(target)
+    }
+
+    fun gatedSeekBy(offsetMs: Long) {
+        gatedSeekTo(exoPlayer.currentPosition + offsetMs)
+    }
+
+    // A caller may seekTo(...) then immediately play() in the same call (e.g. restart-from-ended
+    // flows). If a seek gate is in flight, defer to it instead of forcing playback to start before
+    // the video has actually rendered the seek target.
+    fun gatedPlay() {
+        if (seekGate.awaitingFirstFrame) {
+            seekGate.resumePlayWhenReady = true
+        } else {
+            exoPlayer.playWhenReady = true
+            exoPlayer.play()
+        }
+    }
+
+    fun applyDesiredPlayWhenReady(desired: Boolean) {
+        if (desired) {
+            gatedPlay()
+        } else {
+            seekGate.resumePlayWhenReady = false
+            exoPlayer.playWhenReady = false
+        }
+    }
+
     val nowPlayingController = remember(context, exoPlayer) {
         AndroidPlayerNowPlayingController(
             context = context,
             controls = AndroidPlayerNowPlayingController.PlaybackControls(
-                play = {
-                    exoPlayer.playWhenReady = true
-                    exoPlayer.play()
-                },
+                play = ::gatedPlay,
                 pause = exoPlayer::pause,
-                seekTo = { positionMs -> exoPlayer.seekTo(positionMs.coerceAtLeast(0L)) },
-                seekBy = { offsetMs ->
-                    exoPlayer.seekTo((exoPlayer.currentPosition + offsetMs).coerceAtLeast(0L))
-                },
+                seekTo = ::gatedSeekTo,
+                seekBy = ::gatedSeekBy,
             ),
         )
     }
 
+    fun currentSnapshot(): PlayerPlaybackSnapshot =
+        exoPlayer.snapshot().let {
+            if (seekGate.awaitingFirstFrame) it.copy(isLoading = true, isPlaying = false) else it
+        }
+
     fun dispatchExoPlayerSnapshot() {
-        val snapshot = exoPlayer.snapshot()
+        val snapshot = currentSnapshot()
         latestOnSnapshot.value(snapshot)
         nowPlayingController.syncPlayback(snapshot)
+    }
+
+    fun resetSeekGate() {
+        seekGate.timeoutJob?.cancel()
+        seekGate.timeoutJob = null
+        seekGate.awaitingFirstFrame = false
     }
 
     DisposableEffect(nowPlayingController) {
@@ -429,7 +517,17 @@ private fun ExoPlayerSurface(
 
     LaunchedEffect(exoPlayer, resolvedMediaItem) {
         val mediaItem = resolvedMediaItem ?: return@LaunchedEffect
-        exoPlayer.setPlaybackMediaItem(mediaItem, fallbackStartPositionMs)
+        // fallbackStartPositionMs (mid-session decoder retry) always wins over the original
+        // resume position, since it reflects playback that already progressed past it.
+        val startPositionMs = fallbackStartPositionMs ?: initialPositionMs.takeIf { it > 0L }
+        if (startPositionMs != null && startPositionMs > 0L) {
+            // Cold-starting at a non-zero offset has the same keyframe-catchup race as an
+            // explicit seek (audio can be ready before video has decoded/rendered the frame at
+            // that offset) - hold playback behind the same render gate used for seeks.
+            armSeekGate(latestPlayWhenReady.value)
+            exoPlayer.playWhenReady = false
+        }
+        exoPlayer.setPlaybackMediaItem(mediaItem, startPositionMs)
         exoPlayer.prepare()
     }
 
@@ -459,11 +557,11 @@ private fun ExoPlayerSurface(
         PlayerPictureInPictureManager.registerTogglePlaybackCallback {
             if (exoPlayer.isPlaying) {
                 exoPlayer.pause()
+            } else if (exoPlayer.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                gatedSeekTo(0L)
+                gatedPlay()
             } else {
-                if (exoPlayer.playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                    exoPlayer.seekTo(0L)
-                }
-                exoPlayer.play()
+                gatedPlay()
             }
         }
 
@@ -488,6 +586,7 @@ private fun ExoPlayerSurface(
 
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                resetSeekGate()
                 syncPlayerViewKeepScreenOn()
 
                 val isSourceError = error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
@@ -541,6 +640,9 @@ private fun ExoPlayerSurface(
                     else -> "UNKNOWN($playbackState)"
                 }
                 Log.d(TAG, "onPlaybackStateChanged: $stateName")
+                if (playbackState == Player.STATE_IDLE) {
+                    resetSeekGate()
+                }
                 if (playbackState == Player.STATE_READY) {
                     fallbackStartPositionMs = null
                     latestOnError.value(null)
@@ -550,8 +652,18 @@ private fun ExoPlayerSurface(
                 dispatchExoPlayerSnapshot()
             }
 
+            override fun onRenderedFirstFrame() {
+                if (seekGate.awaitingFirstFrame) {
+                    resetSeekGate()
+                    if (seekGate.resumePlayWhenReady && !exoPlayer.playWhenReady) {
+                        exoPlayer.playWhenReady = true
+                    }
+                }
+                dispatchExoPlayerSnapshot()
+            }
+
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                latestOnSnapshot.value(exoPlayer.snapshot())
+                latestOnSnapshot.value(currentSnapshot())
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -566,6 +678,13 @@ private fun ExoPlayerSurface(
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 Log.d(TAG, "onTracksChanged: ${tracks.groups.size} groups total")
                 exoPlayer.logCurrentTracks("onTracksChanged")
+                if (seekGate.awaitingFirstFrame && tracks.groups.isNotEmpty() && !hasSelectedVideoTrack()) {
+                    // Audio-only source: onRenderedFirstFrame will never fire, don't wait out
+                    // the full timeout for something that can never resolve it.
+                    Log.d(TAG, "onTracksChanged: no video track, releasing seek gate early")
+                    resetSeekGate()
+                    if (seekGate.resumePlayWhenReady) exoPlayer.playWhenReady = true
+                }
                 val selectedVideoFormat = tracks.groups
                     .firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
                     ?.let { group -> (0 until group.length).firstOrNull(group::isTrackSelected)?.let(group::getTrackFormat) }
@@ -606,7 +725,7 @@ private fun ExoPlayerSurface(
         val activity = context.findActivity()
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> exoPlayer.playWhenReady = latestPlayWhenReady.value
+                Lifecycle.Event.ON_START -> applyDesiredPlayWhenReady(latestPlayWhenReady.value)
                 Lifecycle.Event.ON_STOP -> {
                     val isInPictureInPicture =
                         Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true
@@ -628,7 +747,7 @@ private fun ExoPlayerSurface(
     }
 
     LaunchedEffect(exoPlayer, playWhenReady) {
-        exoPlayer.playWhenReady = latestPlayWhenReady.value
+        applyDesiredPlayWhenReady(latestPlayWhenReady.value)
         syncPlayerViewKeepScreenOn()
         dispatchExoPlayerSnapshot()
     }
@@ -637,8 +756,7 @@ private fun ExoPlayerSurface(
         onControllerReady(
             object : PlayerEngineController {
                 override fun play() {
-                    exoPlayer.playWhenReady = true
-                    exoPlayer.play()
+                    gatedPlay()
                 }
 
                 override fun pause() {
@@ -646,11 +764,11 @@ private fun ExoPlayerSurface(
                 }
 
                 override fun seekTo(positionMs: Long) {
-                    exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
+                    gatedSeekTo(positionMs)
                 }
 
                 override fun seekBy(offsetMs: Long) {
-                    exoPlayer.seekTo((exoPlayer.currentPosition + offsetMs).coerceAtLeast(0L))
+                    gatedSeekBy(offsetMs)
                 }
 
                 override fun retry() {
@@ -852,6 +970,7 @@ private fun LibmpvPlayerSurface(
     videoOutput: AndroidLibmpvVideoOutput,
     hardwareDecodingEnabled: Boolean,
     yuv420pEnabled: Boolean,
+    initialPositionMs: Long,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
@@ -871,8 +990,8 @@ private fun LibmpvPlayerSurface(
             AndroidPlayerNowPlayingController(
                 context = context,
                 controls = AndroidPlayerNowPlayingController.PlaybackControls(
-                    play = { view.setPaused(false) },
-                    pause = { view.setPaused(true) },
+                    play = { view.applyDesiredPlayWhenReady(true) },
+                    pause = { view.applyDesiredPlayWhenReady(false) },
                     seekTo = { positionMs -> view.seekToMs(positionMs) },
                     seekBy = { offsetMs -> view.seekByMs(offsetMs) },
                 ),
@@ -889,7 +1008,7 @@ private fun LibmpvPlayerSurface(
         val observer = LifecycleEventObserver { _, event ->
             val view = playerViewRef ?: return@LifecycleEventObserver
             when (event) {
-                Lifecycle.Event.ON_START -> view.setPaused(!latestPlayWhenReady.value)
+                Lifecycle.Event.ON_START -> view.applyDesiredPlayWhenReady(latestPlayWhenReady.value)
                 Lifecycle.Event.ON_STOP -> {
                     val isInPictureInPicture =
                         Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true
@@ -953,6 +1072,7 @@ private fun LibmpvPlayerSurface(
                     }
                     MPV.mpvEvent.MPV_EVENT_FILE_LOADED,
                     MPV.mpvEvent.MPV_EVENT_PLAYBACK_RESTART -> {
+                        view.releaseStartGate()
                         coroutineScope.launch(Dispatchers.Main.immediate) {
                             latestOnError.value(null)
                             val snapshot = view.snapshot()
@@ -983,7 +1103,7 @@ private fun LibmpvPlayerSurface(
                 if (snapshot.isEnded) {
                     view.seekToMs(0L)
                 }
-                view.setPaused(false)
+                view.applyDesiredPlayWhenReady(true)
             }
         }
         onDispose {
@@ -1004,12 +1124,22 @@ private fun LibmpvPlayerSurface(
             requestHeaders = sanitizedSourceHeaders,
             externalSubtitles = externalSubtitles,
             playWhenReady = latestPlayWhenReady.value,
+            startPositionMs = initialPositionMs,
         )
+        if (initialPositionMs > 0L) {
+            // Mirror ExoPlayerSurface's armSeekGate safety net: mpv should release the start
+            // gate itself on MPV_EVENT_PLAYBACK_RESTART, but bail out after a bounded wait if
+            // that never arrives (e.g. an audio-only source, or an unexpected format quirk).
+            coroutineScope.launch {
+                delay(2_500L)
+                view.releaseStartGate()
+            }
+        }
     }
 
     LaunchedEffect(playerViewRef, playWhenReady) {
         val view = playerViewRef ?: return@LaunchedEffect
-        view.setPaused(!latestPlayWhenReady.value)
+        view.applyDesiredPlayWhenReady(latestPlayWhenReady.value)
         view.keepScreenOn = view.shouldKeepScreenOn()
         val snapshot = view.snapshot()
         latestOnSnapshot.value(snapshot)
