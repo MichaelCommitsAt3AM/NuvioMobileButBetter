@@ -70,11 +70,11 @@ This fork only ships Android releases — don't build, sign, or publish iOS for 
 
 ### Versioning and releases
 
-Fork releases use `<upstream-version>-fork.<N>` (e.g. `0.3.1-fork.1`, `0.3.1-fork.2`), tracked in `MARKETING_VERSION` in `iosApp/Configuration/Version.xcconfig` alongside `CURRENT_PROJECT_VERSION` (the Android `versionCode`). Manage both with `scripts/bump-version.sh` rather than hand-editing the xcconfig:
+Fork releases use `Major.Minor.Patch.Fork` (e.g. `0.3.1.1`, `0.3.1.2`) — the first three segments mirror upstream's last-synced version, and `Fork` increments by 1 per release since that sync, resetting to `1` only on a release that is itself an upstream sync. Tracked in `MARKETING_VERSION` in `iosApp/Configuration/Version.xcconfig` alongside `CURRENT_PROJECT_VERSION` (the Android `versionCode`). Manage both with `scripts/bump-version.sh` rather than hand-editing the xcconfig:
 
 ```bash
-./scripts/bump-version.sh fork                       # 0.3.1-fork.1 -> 0.3.1-fork.2 (regular release)
-./scripts/bump-version.sh sync-upstream 0.3.2         # after merging upstream -> 0.3.2-fork.1
+./scripts/bump-version.sh fork                       # 0.3.1.1 -> 0.3.1.2 (regular release)
+./scripts/bump-version.sh sync-upstream 0.3.2         # after merging upstream -> 0.3.2.1
 ./scripts/bump-version.sh sync-upstream --ref upstream/cmp-rewrite  # same, auto-read from a ref
 ```
 

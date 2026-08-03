@@ -17,6 +17,24 @@ read_version() {
         | head -n 1
 }
 
+# Derives the release title from Major.Minor.Patch.Fork: a Fork segment of 1
+# means this release is an upstream sync (see scripts/bump-version.sh), any
+# other value is a regular fork update.
+release_title() {
+    local version="$1"
+    if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.([0-9]+)$ ]]; then
+        local base="${BASH_REMATCH[1]}"
+        local fork="${BASH_REMATCH[2]}"
+        if [[ "$fork" == "1" ]]; then
+            printf '%s - sync with upstream' "$base"
+        else
+            printf '%s - Fork update %s' "$base" "$fork"
+        fi
+    else
+        printf '%s' "$version"
+    fi
+}
+
 current_version=""
 current_bump=""
 previous_version=""
@@ -48,6 +66,7 @@ fi
 
 printf 'version=%s\n' "$current_version"
 printf 'tag=%s\n' "$current_version"
+printf 'title=%s\n' "$(release_title "$current_version")"
 printf 'release_commit=%s\n' "$(git rev-parse "${target_ref}^{commit}")"
 printf 'current_bump=%s\n' "$current_bump"
 printf 'previous_version=%s\n' "$previous_version"

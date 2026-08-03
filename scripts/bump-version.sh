@@ -10,13 +10,13 @@ usage() {
 Usage:
   ./scripts/bump-version.sh fork
       Cut a regular fork release: increments the fork number only,
-      e.g. 0.3.1-fork.1 -> 0.3.1-fork.2. Use this for every release
-      that is not immediately after an upstream merge.
+      e.g. 0.3.1.1 -> 0.3.1.2. Use this for every release that is not
+      immediately after an upstream merge.
 
   ./scripts/bump-version.sh sync-upstream <X.Y.Z>
       Cut a release right after merging upstream: sets the version to
-      <X.Y.Z>-fork.1, matching upstream's version and resetting the
-      fork number.
+      <X.Y.Z>.1, matching upstream's version and resetting the fork
+      number.
 
   ./scripts/bump-version.sh sync-upstream [--ref <git-ref>]
       Same as above, but read <X.Y.Z> from MARKETING_VERSION in
@@ -109,16 +109,16 @@ case "$command" in
       exit 1
     fi
 
-    if [[ "$current_marketing_version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-fork\.([0-9]+)$ ]]; then
+    if [[ "$current_marketing_version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.([0-9]+)$ ]]; then
       base_version="${BASH_REMATCH[1]}"
       fork_number="${BASH_REMATCH[2]}"
     else
-      echo "error: current MARKETING_VERSION ('$current_marketing_version') is not in X.Y.Z-fork.N format." >&2
+      echo "error: current MARKETING_VERSION ('$current_marketing_version') is not in X.Y.Z.N format." >&2
       echo "Run './scripts/bump-version.sh sync-upstream <X.Y.Z>' first to establish fork numbering." >&2
       exit 1
     fi
 
-    new_marketing_version="${base_version}-fork.$((fork_number + 1))"
+    new_marketing_version="${base_version}.$((fork_number + 1))"
     ;;
 
   sync-upstream)
@@ -166,8 +166,10 @@ case "$command" in
       }
 
       target_version="$(printf '%s\n' "$upstream_xcconfig" | grep -E '^MARKETING_VERSION=' | tail -n1 | cut -d'=' -f2- | tr -d '\r\n')"
-      # Defensive: strip a -fork.N suffix if the ref happens to carry one.
-      target_version="${target_version%%-fork.*}"
+      # Defensive: strip a trailing .N fork segment if the ref happens to carry one.
+      if [[ "$target_version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$ ]]; then
+        target_version="${BASH_REMATCH[1]}"
+      fi
     fi
 
     if [[ ! "$target_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -175,7 +177,7 @@ case "$command" in
       exit 1
     fi
 
-    new_marketing_version="${target_version}-fork.1"
+    new_marketing_version="${target_version}.1"
     ;;
 
   -h|--help|"")
