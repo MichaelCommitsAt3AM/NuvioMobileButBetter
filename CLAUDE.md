@@ -56,7 +56,9 @@ Secrets/config (Supabase URL+key, Sentry DSN, Trakt client id/secret, TMDB/IMDB 
 
 ### Sync
 
-Cross-device state sync (watch progress, library, settings) goes through `core/sync/SyncManager.kt` + `RealtimeSyncInvalidationService.kt` backed by Supabase Realtime/Postgrest. `RealtimeSyncConfig.ENABLED` (generated, driven by `NUVIO_REALTIME_SYNC_ENABLED`) can disable realtime push while keeping the rest of sync intact.
+Cross-device state sync (watch progress, library, settings) goes through `core/sync/SyncManager.kt` backed by Supabase Postgrest. There is **no realtime/push channel** — realtime sync was removed upstream and arrived in the 0.4.1 sync, taking `RealtimeSyncInvalidationService`, `RealtimeSyncConfig.ENABLED` and `NUVIO_REALTIME_SYNC_ENABLED` with it. Don't reach for those; they no longer exist. State is pulled when the app returns to the foreground (`AppForegroundMonitor` + `SyncManager`'s foreground pull job), not pushed from the server, so "why didn't my other device update instantly" is expected behaviour rather than a bug.
+
+`SyncClientIdentity` mints a stable per-install id passed to Supabase as `p_origin_client_id`, letting a device distinguish its own writes from other devices'. The library has its own incremental delta-sync layer under `features/library/sync/` (`LibrarySyncAdapter` / `SupabaseLibrarySyncAdapter`, `LibrarySyncPaging`, `LibrarySyncReconciler`) instead of re-fetching the whole library — change library sync there, not in `SyncManager`.
 
 ### No dependency-injection framework
 
