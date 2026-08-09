@@ -81,3 +81,5 @@ Fork releases use `Major.Minor.Patch.Fork` (e.g. `0.3.1.1`, `0.3.1.2`) — the f
 ```
 
 `CURRENT_PROJECT_VERSION` always increments by exactly 1 on every release and is never reset, even when `sync-upstream` resets the fork number — it's the Android `versionCode` and drives the in-app updater (`AppFeaturePolicy.inAppUpdaterEnabled`), so it must keep increasing monotonically regardless of what the marketing version string does. The script commits and locally tags the bump (tag name == the new version); it doesn't push or build anything.
+
+GitHub release notes should be short, feature-level bullet points in plain non-technical language (what changed for a user, not what changed in the code) — not a raw commit list. `scripts/generate-release-notes.sh` produces a commit-list draft; rewrite that into a handful of plain-English bullets before publishing, grouping related commits into one line each.
