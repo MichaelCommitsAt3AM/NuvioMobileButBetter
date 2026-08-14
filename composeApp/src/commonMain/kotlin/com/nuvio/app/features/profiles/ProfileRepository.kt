@@ -211,6 +211,7 @@ object ProfileRepository {
         avatarId: String? = null,
         avatarUrl: String? = null,
         usesPrimaryAddons: Boolean = false,
+        primaryAddonsAllowlist: List<String>? = null,
     ) {
         val existing = _state.value.profiles
         val nextIndex = ((1..MAX_PROFILES).toSet() - existing.map { it.profileIndex }.toSet()).minOrNull() ?: return
@@ -222,6 +223,7 @@ object ProfileRepository {
                 avatarColorHex = profile.avatarColorHex,
                 usesPrimaryAddons = profile.usesPrimaryAddons,
                 usesPrimaryPlugins = profile.usesPrimaryPlugins,
+                primaryAddonsAllowlist = profile.primaryAddonsAllowlist,
                 avatarId = profile.avatarId,
                 avatarUrl = profile.avatarUrl,
             )
@@ -230,11 +232,18 @@ object ProfileRepository {
             name = name,
             avatarColorHex = avatarColorHex,
             usesPrimaryAddons = usesPrimaryAddons,
+            primaryAddonsAllowlist = primaryAddonsAllowlist,
             avatarId = avatarId,
             avatarUrl = avatarUrl,
         )
 
         pushProfiles(allPayloads)
+
+        // One-time onboarding convenience, not an ongoing tie to the primary profile —
+        // the new profile manages its own addon list independently from here on.
+        if (usesPrimaryAddons && _state.value.profiles.any { it.profileIndex == nextIndex }) {
+            AddonRepository.copyPrimaryAddonsToProfile(nextIndex, primaryAddonsAllowlist)
+        }
     }
 
     suspend fun updateProfile(
@@ -244,6 +253,8 @@ object ProfileRepository {
         avatarId: String? = null,
         avatarUrl: String? = null,
         usesPrimaryAddons: Boolean = false,
+        usesPrimaryPlugins: Boolean = false,
+        primaryAddonsAllowlist: List<String>? = null,
     ) {
         val allPayloads = _state.value.profiles.map { profile ->
             if (profile.profileIndex == profileIndex) {
@@ -252,6 +263,8 @@ object ProfileRepository {
                     name = name,
                     avatarColorHex = avatarColorHex,
                     usesPrimaryAddons = usesPrimaryAddons,
+                    usesPrimaryPlugins = usesPrimaryPlugins,
+                    primaryAddonsAllowlist = primaryAddonsAllowlist,
                     avatarId = avatarId,
                     avatarUrl = avatarUrl,
                 )
@@ -262,6 +275,7 @@ object ProfileRepository {
                     avatarColorHex = profile.avatarColorHex,
                     usesPrimaryAddons = profile.usesPrimaryAddons,
                     usesPrimaryPlugins = profile.usesPrimaryPlugins,
+                    primaryAddonsAllowlist = profile.primaryAddonsAllowlist,
                     avatarId = profile.avatarId,
                     avatarUrl = profile.avatarUrl,
                 )
@@ -269,9 +283,16 @@ object ProfileRepository {
         }
 
         pushProfiles(allPayloads)
+
+        // One-time onboarding convenience, not an ongoing tie to the primary profile —
+        // re-copying on every save is safe since it only ever merges, never replaces.
+        if (usesPrimaryAddons) {
+            AddonRepository.copyPrimaryAddonsToProfile(profileIndex, primaryAddonsAllowlist)
+        }
     }
 
     suspend fun deleteProfile(profileIndex: Int) {
+        AddonRepository.clearLocalDataForDeletedProfile(profileIndex)
         if (AuthRepository.state.value.isAnonymous) {
             val remaining = _state.value.profiles.filter { it.profileIndex != profileIndex }
             ProfilePinCacheStorage.removePayload(profileIndex)
