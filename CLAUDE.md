@@ -82,4 +82,19 @@ Fork releases use `Major.Minor.Patch.Fork` (e.g. `0.3.1.1`, `0.3.1.2`) — the f
 
 `CURRENT_PROJECT_VERSION` always increments by exactly 1 on every release and is never reset, even when `sync-upstream` resets the fork number — it's the Android `versionCode` and drives the in-app updater (`AppFeaturePolicy.inAppUpdaterEnabled`), so it must keep increasing monotonically regardless of what the marketing version string does. The script commits and locally tags the bump (tag name == the new version); it doesn't push or build anything.
 
+### Building and publishing a release
+
+Always build and sign the release APK locally — do **not** dispatch `.github/workflows/android-release.yml`. That workflow exists and looks like the intended path, but this repo's `NUVIO_LOCAL_PROPERTIES_BASE64`/`NUVIO_RELEASE_KEYSTORE_BASE64` Actions secrets aren't configured, so every run fails at the "Validate release state" step before anything gets built (confirmed by a real failed run — "Missing required release secrets"). Until those secrets are added in the repo's Settings → Secrets and variables → Actions, do the whole release locally instead:
+
+```bash
+git push origin HEAD   # push the version-bump commit (not the local tag bump-version.sh made)
+NUVIO_ANDROID_DISTRIBUTION=full ./gradlew :androidApp:assembleFullRelease
+gh release create <version> --repo MichaelCommitsAt3AM/NuvioMobileButBetter \
+  --target <branch> --title "<Major.Minor.Patch> - Fork update <Fork>" --latest --notes "..."
+gh release upload <version> --repo MichaelCommitsAt3AM/NuvioMobileButBetter \
+  androidApp/build/outputs/apk/full/release/androidApp-full-release.apk
+```
+
+Local signing already works via `local.properties`/`keystore/release.keystore` (the same fields the CI workflow expects), so no extra setup is needed for this path. If the missing secrets are ever configured, this note should be revisited — dispatching the workflow is less error-prone once it actually works.
+
 GitHub release notes should be short, feature-level bullet points in plain non-technical language (what changed for a user, not what changed in the code) — not a raw commit list. `scripts/generate-release-notes.sh` produces a commit-list draft; rewrite that into a handful of plain-English bullets before publishing, grouping related commits into one line each.
