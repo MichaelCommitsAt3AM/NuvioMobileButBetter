@@ -70,6 +70,13 @@ This is a personal fork (`origin` = `MichaelCommitsAt3AM/NuvioMobileButBetter`) 
 
 This fork only ships Android releases — don't build, sign, or publish iOS for a release here.
 
+### Upstream sync conflict resolutions
+
+These recur on every `merge upstream/cmp-rewrite` — resolve them the same way each time without asking:
+
+- **`.github/workflows/android-release.yml`**: always keep this fork's version entirely (`git checkout --ours`), discarding upstream's version wholesale. Upstream has restructured this into a multi-job `prepare`/`android`/`ios`/`release` pipeline that also builds and ships iOS IPAs; this fork doesn't build iOS (see above) and doesn't even dispatch this workflow — its required secrets aren't configured, releases are always built and published locally (see "Building and publishing a release" below). Don't try to cherry-pick pieces of upstream's restructure into it.
+- **`AddonRepository.kt` — primary-profile addon sharing**: this fork replaced upstream's live guard-based model (`isUsingPrimaryAddonsFromSecondaryProfile()`, which blocked local edits while mirroring a primary profile's addons) with a copy-based model (`copyPrimaryAddonsToProfile()`/`fetchPrimaryAddonsForPicker()`, a one-time copy the user can then edit freely) and deleted the guard function. Upstream keeps extending the old guard into more call sites (e.g. `moveAddon`, `pushToServer`) on every sync. When that conflicts: drop any reintroduced `isUsingPrimaryAddonsFromSecondaryProfile()` call (the function doesn't exist on this fork), but keep whatever *unrelated* structural improvements upstream bundled into the same functions (e.g. debounced pushes via `pushJobsByProfile`, no-op `changed`/`shouldRefresh` tracking to skip redundant persist/push calls) — those aren't part of the addon-sharing model and are worth keeping. Watch for compile breakage: other non-conflicting parts of the file may already assume upstream's newer structure (e.g. a `pushJobsByProfile` map or `finally` block referencing a job variable), so a literal "keep ours" on the conflicting hunk alone can leave dangling references — reconcile rather than dropping the whole hunk blind.
+
 ### Versioning and releases
 
 Fork releases use `Major.Minor.Patch.Fork` (e.g. `0.3.1.1`, `0.3.1.2`) — the first three segments mirror upstream's last-synced version, and `Fork` increments by 1 per release since that sync, resetting to `1` only on a release that is itself an upstream sync. Tracked in `MARKETING_VERSION` in `iosApp/Configuration/Version.xcconfig` alongside `CURRENT_PROJECT_VERSION` (the Android `versionCode`). Manage both with `scripts/bump-version.sh` rather than hand-editing the xcconfig:
