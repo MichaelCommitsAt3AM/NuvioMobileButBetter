@@ -97,11 +97,13 @@ Always build and sign the release APK locally — do **not** dispatch `.github/w
 git push origin HEAD   # push the version-bump commit (not the local tag bump-version.sh made)
 NUVIO_ANDROID_DISTRIBUTION=full ./gradlew :androidApp:assembleFullRelease
 gh release create <version> --repo MichaelCommitsAt3AM/NuvioMobileButBetter \
-  --target <branch> --title "<Major.Minor.Patch> - Fork update <Fork>" --latest --notes "..."
+  --target <branch> --title "<title>" --latest --notes "..."
 gh release upload <version> --repo MichaelCommitsAt3AM/NuvioMobileButBetter \
   androidApp/build/outputs/apk/full/release/androidApp-full-release.apk
 ```
 
 Local signing already works via `local.properties`/`keystore/release.keystore` (the same fields the CI workflow expects), so no extra setup is needed for this path. If the missing secrets are ever configured, this note should be revisited — dispatching the workflow is less error-prone once it actually works.
+
+Release title depends on which kind of release this is: a regular fork release (fork number incremented via `bump-version.sh fork`) is titled `"<Major.Minor.Patch> - Fork update <Fork>"`; a release that is itself an upstream sync (fork number reset to `.1` via `bump-version.sh sync-upstream`) is titled `"<Major.Minor.Patch> - Sync with upstream"` instead.
 
 GitHub release notes should be short, feature-level bullet points in plain non-technical language (what changed for a user, not what changed in the code) — not a raw commit list. `scripts/generate-release-notes.sh` produces a commit-list draft; rewrite that into a handful of plain-English bullets before publishing, grouping related commits into one line each.
