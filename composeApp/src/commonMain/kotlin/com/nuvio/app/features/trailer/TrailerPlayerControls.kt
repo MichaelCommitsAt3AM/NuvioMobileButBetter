@@ -122,7 +122,6 @@ internal fun TrailerPlayerControls(
                         ) {
                             PlayPauseControlButton(
                                 isPlaying = state.snapshot.isPlaying,
-                                isBuffering = false,
                                 metrics = metrics,
                                 onClick = {
                                     controlsVisible = true

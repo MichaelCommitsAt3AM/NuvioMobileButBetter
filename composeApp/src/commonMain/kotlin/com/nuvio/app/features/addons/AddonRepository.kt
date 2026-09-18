@@ -121,7 +121,7 @@ object AddonRepository {
 
     suspend fun pullFromServer(profileId: Int) {
         currentProfileId = profileId
-        log.i { "pullFromServer() — profileId=$profileId, initialized=$initialized, pulledFromServer=$pulledFromServer" }
+        log.i { "pullFromServer() — profileId=$profileId, initialized=$initialized" }
         runCatching {
             val rows = SupabaseProvider.client.postgrest
                 .from("addons")
@@ -421,7 +421,7 @@ object AddonRepository {
     /**
      * Read-only snapshot of the primary profile's (profile 1) addons, for the
      * "choose specific addons" picker in ProfileEditScreen. Deliberately does not
-     * touch currentProfileId/initialized/pulledFromServer/_uiState — must be safe
+     * touch currentProfileId/initialized/_uiState — must be safe
      * to call while a different profile is the live/active one.
      */
     suspend fun fetchPrimaryAddonsForPicker(): List<PrimaryAddonPickerItem> {
