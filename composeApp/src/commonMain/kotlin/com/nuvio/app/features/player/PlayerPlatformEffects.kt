@@ -41,3 +41,6 @@ expect fun rememberIsInPictureInPicture(): Boolean
 
 @Composable
 expect fun rememberPlayerGestureController(): PlayerGestureController?
+
+@Composable
+expect fun rememberDisplaySupportsHdr(): Boolean

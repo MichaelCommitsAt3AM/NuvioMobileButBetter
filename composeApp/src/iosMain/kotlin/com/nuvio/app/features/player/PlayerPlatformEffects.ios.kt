@@ -80,6 +80,10 @@ actual fun ManagePlayerPictureInPicture(
 actual fun rememberIsInPictureInPicture(): Boolean = false
 
 @Composable
+actual fun rememberDisplaySupportsHdr(): Boolean =
+    remember { UIScreen.mainScreen.potentialEDRHeadroom > 1.0 }
+
+@Composable
 actual fun rememberPlayerGestureController(): PlayerGestureController? {
     val controller = remember { IOSPlayerGestureController() }
 

@@ -190,8 +190,11 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         subtitleAutoSyncState = SubtitleAutoSyncUiState()
     }
 
-    LaunchedEffect(playerController, subtitleStyle) {
-        playerController?.applySubtitleStyle(subtitleStyle)
+    val displaySupportsHdr = rememberDisplaySupportsHdr()
+    LaunchedEffect(playerController, subtitleStyle, playbackSnapshot.isHdr, displaySupportsHdr) {
+        playerController?.applySubtitleStyle(
+            subtitleStyle.withHdrAwareOpacity(playbackSnapshot.isHdr, displaySupportsHdr),
+        )
     }
 
     val subtitlePreferenceKey = listOf(

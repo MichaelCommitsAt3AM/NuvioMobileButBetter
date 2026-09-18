@@ -143,6 +143,18 @@ actual fun rememberPlayerGestureController(): PlayerGestureController? {
     return controller
 }
 
+@Composable
+actual fun rememberDisplaySupportsHdr(): Boolean {
+    val activity = LocalContext.current.findActivity() ?: return false
+    return remember(activity) {
+        @Suppress("DEPRECATION")
+        activity.windowManager.defaultDisplay
+            ?.hdrCapabilities
+            ?.supportedHdrTypes
+            ?.isNotEmpty() == true
+    }
+}
+
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
         is Activity -> this

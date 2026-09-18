@@ -193,6 +193,7 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
     func getPositionMs() -> Int64 { return playerVC?.positionMs ?? 0 }
     func getBufferedMs() -> Int64 { return playerVC?.bufferedMs ?? 0 }
     func getPlaybackSpeed() -> Float { playerVC?.currentSpeed ?? 1.0 }
+    func getIsHdr() -> Bool { return playerVC?.isHdr ?? false }
     func getErrorMessage() -> String { playerVC?.currentErrorMessage ?? "" }
 
     func destroy() {
@@ -285,6 +286,7 @@ final class MPVPlayerViewController: UIViewController {
     var positionMs: Int64 = 0
     var bufferedMs: Int64 = 0
     var currentSpeed: Float = 1.0
+    var isHdr: Bool = false
     var currentErrorMessage: String {
         errorStateLock.lock()
         defer { errorStateLock.unlock() }
@@ -904,6 +906,8 @@ final class MPVPlayerViewController: UIViewController {
         positionMs = Int64(max(position, 0) * 1000)
         bufferedMs = Int64(max(position + cached, 0) * 1000)
         currentSpeed = Float(speed > 0 ? speed : 1.0)
+        let gamma = getString("video-out-params/gamma") ?? getString("video-params/gamma")
+        isHdr = gamma == "pq" || gamma == "hlg"
 
         let shouldPublishNowPlayingState = !isPlayerLoading || isPlayerPlaying || durationMs > 0 || positionMs > 0
         if shouldPublishNowPlayingState {

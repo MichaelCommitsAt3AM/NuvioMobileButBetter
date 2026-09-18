@@ -37,6 +37,7 @@ import org.jetbrains.compose.resources.getString
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
+import androidx.media3.common.ColorInfo
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -1538,6 +1539,8 @@ private class NuvioLibmpvView(
         val videoHeight = mpv.getPropertyInt("video-out-params/dh")
             ?: mpv.getPropertyInt("video-params/dh")
             ?: 0
+        val videoGamma = mpv.getPropertyString("video-out-params/gamma")
+            ?: mpv.getPropertyString("video-params/gamma")
         return PlayerPlaybackSnapshot(
             isLoading = isLoading,
             isPlaying = !paused && !isLoading && !idle && !ended,
@@ -1548,6 +1551,7 @@ private class NuvioLibmpvView(
             playbackSpeed = (mpv.getPropertyDouble("speed") ?: 1.0).toFloat(),
             videoWidth = videoWidth,
             videoHeight = videoHeight,
+            isHdr = videoGamma == "pq" || videoGamma == "hlg",
         )
     }
 
@@ -1880,6 +1884,11 @@ private fun ExoPlayer.snapshot(): PlayerPlaybackSnapshot {
         playbackSpeed = playbackParameters.speed,
         videoWidth = videoWidth,
         videoHeight = videoHeight,
+        // Dolby Vision tracks report as their own sample MIME type with colorInfo left
+        // unset (Media3 tracks DV metadata separately from the generic HDR transfer function),
+        // so isTransferHdr alone misses them entirely.
+        isHdr = ColorInfo.isTransferHdr(videoFormat?.colorInfo) ||
+            videoFormat?.sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION,
     )
 }
 

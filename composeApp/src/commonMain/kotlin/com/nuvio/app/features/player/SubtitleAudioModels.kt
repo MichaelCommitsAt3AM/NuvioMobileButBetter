@@ -60,6 +60,20 @@ data class SubtitleStyleState(
     }
 }
 
+private const val HDR_SUBTITLE_OPACITY_MULTIPLIER = 0.8f
+
+/**
+ * HDR content is rendered brighter than SDR on a display that actually supports HDR, which
+ * makes fixed-brightness subtitle text look harsh by comparison. Dim it a bit in that case only
+ * — a display that just tone-maps HDR down to SDR shouldn't get this adjustment.
+ */
+fun SubtitleStyleState.withHdrAwareOpacity(isHdrContent: Boolean, displaySupportsHdr: Boolean): SubtitleStyleState =
+    if (isHdrContent && displaySupportsHdr) {
+        copy(textColor = textColor.copy(alpha = textColor.alpha * HDR_SUBTITLE_OPACITY_MULTIPLIER))
+    } else {
+        this
+    }
+
 data class SubtitleSyncCue(
     val startTimeMs: Long,
     val endTimeMs: Long = startTimeMs + 5_000L,
