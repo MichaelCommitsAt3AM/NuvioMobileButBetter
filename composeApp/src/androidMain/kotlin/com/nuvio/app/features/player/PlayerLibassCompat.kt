@@ -16,7 +16,6 @@ import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.text.SubtitleParser
 import io.github.peerless2012.ass.media.AssHandler
-import io.github.peerless2012.ass.media.extractor.AssMatroskaExtractor
 import io.github.peerless2012.ass.media.kt.withAssSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
@@ -108,7 +107,7 @@ private fun ExtractorsFactory.withAssMkvSupportCompat(
         val extractors = createExtractors()
         extractors.forEachIndexed { index, extractor ->
             if (extractor is MatroskaExtractor) {
-                extractors[index] = AssMatroskaExtractor(subtitleParserFactory, assHandler)
+                extractors[index] = VideoCueAssMatroskaExtractor(subtitleParserFactory, assHandler)
             }
         }
         extractors
