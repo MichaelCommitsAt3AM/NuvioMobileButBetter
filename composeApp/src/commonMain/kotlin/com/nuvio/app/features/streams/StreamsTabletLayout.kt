@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.platformPhysicalTopInset
 import com.nuvio.app.isIos
 import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.hazeEffect
@@ -166,7 +167,7 @@ internal fun TabletStreamsLayout(
                     .weight(0.6f)
                     .fillMaxHeight()
                     .padding(
-                        top = if (isIos) 20.dp else 60.dp,
+                        top = if (isIos) platformPhysicalTopInset() + 60.dp else 60.dp,
                         end = 12.dp,
                         bottom = 12.dp,
                     ),
@@ -397,7 +398,7 @@ private fun ActiveScrapersStatusBlock(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 ) {
                     Text(

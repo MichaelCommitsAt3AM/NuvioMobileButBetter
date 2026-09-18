@@ -286,6 +286,7 @@ private fun PlaybackSettingsSection(
     libassRenderType: String,
 ) {
     var showPreferredAudioDialog by remember { mutableStateOf(false) }
+    var showAutoSkipSegmentDialog by remember { mutableStateOf(false) }
     var showSecondaryAudioDialog by remember { mutableStateOf(false) }
     var showPreferredSubtitleDialog by remember { mutableStateOf(false) }
     var showSecondarySubtitleDialog by remember { mutableStateOf(false) }
@@ -350,6 +351,22 @@ private fun PlaybackSettingsSection(
                     checked = showLoadingOverlay,
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setShowLoadingOverlay,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.playback_show_loading_status),
+                    description = stringResource(Res.string.playback_show_loading_status_sub),
+                    checked = autoPlayPlayerSettings.showPlayerLoadingStatus,
+                    isTablet = isTablet,
+                    onCheckedChange = PlayerSettingsRepository::setShowPlayerLoadingStatus,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_playback_pause_overlay),
+                    description = stringResource(Res.string.settings_playback_pause_overlay_description),
+                    checked = autoPlayPlayerSettings.pauseOverlayEnabled,
+                    isTablet = isTablet,
+                    onCheckedChange = PlayerSettingsRepository::setPauseOverlayEnabled,
                 )
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
@@ -991,8 +1008,17 @@ private fun PlaybackSettingsSection(
                     title = stringResource(Res.string.settings_playback_skip_intro_outro_recap),
                     description = stringResource(Res.string.settings_playback_skip_intro_outro_recap_description),
                     checked = autoPlayPlayerSettings.skipIntroEnabled,
+                    enabled = !autoPlayPlayerSettings.externalPlayerEnabled,
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setSkipIntroEnabled,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsNavigationRow(
+                    title = stringResource(Res.string.settings_playback_auto_skip_segments),
+                    description = autoSkipSelectionSummary(autoPlayPlayerSettings.autoSkipSegmentTypes),
+                    enabled = autoPlayPlayerSettings.skipIntroEnabled && !autoPlayPlayerSettings.externalPlayerEnabled,
+                    isTablet = isTablet,
+                    onClick = { showAutoSkipSegmentDialog = true },
                 )
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
@@ -1225,6 +1251,14 @@ private fun PlaybackSettingsSection(
                 }
             }
         }
+    }
+
+    if (showAutoSkipSegmentDialog) {
+        AutoSkipSegmentSelectionDialog(
+            selectedTypes = autoPlayPlayerSettings.autoSkipSegmentTypes,
+            onTypeToggled = PlayerSettingsRepository::setAutoSkipSegmentTypeEnabled,
+            onDismiss = { showAutoSkipSegmentDialog = false },
+        )
     }
 
     if (showPreferredAudioDialog) {
@@ -1675,7 +1709,7 @@ private fun PlayerPreferenceDialog(
                         color = if (internalSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         },
                     ) {
                         Row(
@@ -1714,7 +1748,7 @@ private fun PlayerPreferenceDialog(
                         color = if (isExternal) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         },
                     ) {
                         Row(
@@ -1799,7 +1833,7 @@ private fun ExternalPlayerSelectionDialog(
                             val containerColor = if (isSelected) {
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                             } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                MaterialTheme.colorScheme.surfaceVariant
                             }
 
                             Surface(
@@ -1890,7 +1924,7 @@ private fun LanguageSelectionDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -1985,7 +2019,7 @@ private fun ReuseCacheDurationDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -2076,7 +2110,7 @@ private fun DecoderPriorityDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -2167,7 +2201,7 @@ private fun PlaybackEngineDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -2259,7 +2293,7 @@ private fun <T> IosEnumSelectionDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -2363,7 +2397,7 @@ private fun LibassRenderTypeDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -2452,7 +2486,7 @@ private fun SubtitleColorDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
                         Surface(
                             modifier = Modifier
@@ -2568,7 +2602,7 @@ private fun StreamAutoPlayModeDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -2695,7 +2729,7 @@ private fun StreamAutoPlaySourceDialog(
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         Surface(
@@ -2791,7 +2825,7 @@ private fun StreamAutoPlayProviderSelectionDialog(
                 val allContainerColor = if (selected.isEmpty()) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                 } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    MaterialTheme.colorScheme.surfaceVariant
                 }
                 Surface(
                     modifier = Modifier
@@ -2844,7 +2878,7 @@ private fun StreamAutoPlayProviderSelectionDialog(
                             val containerColor = if (isSelected) {
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                             } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                MaterialTheme.colorScheme.surfaceVariant
                             }
 
                             Surface(
@@ -2964,7 +2998,7 @@ private fun StreamAutoPlayRegexDialog(
                                 regexError = null
                             },
                             shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                         ) {
                             Text(
                                 text = label,
@@ -2979,7 +3013,7 @@ private fun StreamAutoPlayRegexDialog(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     border = BorderStroke(
                         1.dp,
                         if (regexError != null) MaterialTheme.colorScheme.error
@@ -3089,7 +3123,7 @@ private fun AnimeSkipClientIdDialog(
                 )
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                 ) {
                     BasicTextField(
@@ -3249,7 +3283,7 @@ private fun NextEpisodeThresholdModeDialog(
                     val containerColor = if (isSelected) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        MaterialTheme.colorScheme.surfaceVariant
                     }
                     Surface(
                         modifier = Modifier

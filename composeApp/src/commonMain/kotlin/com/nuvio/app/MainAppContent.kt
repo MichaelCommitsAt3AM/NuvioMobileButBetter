@@ -26,11 +26,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +48,9 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
+import com.nuvio.app.core.ui.LocalPosterClickAnchor
+import com.nuvio.app.navigation.PosterNavigationState
+import com.nuvio.app.navigation.posterNavigationEntry
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.DeviceSessionRegistration
@@ -94,7 +99,9 @@ import com.nuvio.app.features.cloud.providerPosterUrl
 import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.collection.CollectionSyncService
 import com.nuvio.app.features.details.MetaDetailsRepository
+import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.DownloadSubtitles
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
@@ -124,6 +131,8 @@ import com.nuvio.app.features.player.PlayerPlaybackSnapshot
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.SubtitleLanguageOption
 import com.nuvio.app.features.player.prepareExternalPlayerLaunch
+import com.nuvio.app.features.player.LockPlayerToLandscape
+import com.nuvio.app.features.player.HidePlayerSystemBars
 import com.nuvio.app.features.player.rememberExternalPlayerLauncher
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.settings.AccountSettingsScreen
@@ -196,17 +205,26 @@ internal fun MainAppContent(
     onSwitchProfile: () -> Unit = {},
 ) {
         val navBackStack = rememberNavBackStack(navigationSavedStateConfiguration, initialRoute)
+        val posterNavigation = remember { PosterNavigationState() }
+        val metaScreenSettings by remember {
+            MetaScreenSettingsRepository.ensureLoaded()
+            MetaScreenSettingsRepository.uiState
+        }.collectAsStateWithLifecycle()
+        val posterNavigationEnabled = supportsPosterNavigationMotion &&
+            metaScreenSettings.posterTransitionEnabled && onNavigate == null
         val routeDisposalDecorator = remember {
             RouteDisposalNavEntryDecorator<NavKey> { key ->
                 if (key is AppRoute) disposeRoute(key)
             }
         }
-        val navController = remember(navBackStack, onNavigate, onGoBack, onReplace) {
+        val navController = remember(navBackStack, onNavigate, onGoBack, onReplace, posterNavigationEnabled) {
             NuvioNavigator(
                 backStack = navBackStack,
                 onExternalNavigate = onNavigate,
                 onExternalBack = onGoBack,
                 onExternalReplace = onReplace,
+                onLocalNavigate = if (posterNavigationEnabled) posterNavigation::navigate else null,
+                onLocalPop = if (posterNavigationEnabled) posterNavigation::clear else null,
             )
         }
         val appUpdaterController = rememberAppUpdaterController()
@@ -233,6 +251,18 @@ internal fun MainAppContent(
         val libraryScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val settingsRootActionRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val currentRoute = navBackStack.lastOrNull() as? AppRoute
+        LaunchedEffect(currentRoute, posterNavigationEnabled) {
+            val request = posterNavigation.active
+            if (!posterNavigationEnabled || (request != null && currentRoute != request.to)) posterNavigation.clear()
+        }
+        LaunchedEffect(posterNavigation.active?.to) {
+            posterNavigation.active?.to?.let { route ->
+                MetaDetailsRepository.load(route.type, route.id)
+            }
+        }
+        DisposableEffect(posterNavigation) {
+            onDispose { posterNavigation.clear() }
+        }
         val liquidGlassNativeTabBarEnabled by remember {
             ThemeSettingsRepository.liquidGlassNativeTabBarEnabled
         }.collectAsStateWithLifecycle()
@@ -279,6 +309,12 @@ internal fun MainAppContent(
         PlayerSettingsRepository.ensureLoaded()
         PlayerSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
+    var visiblePlayerEntries by remember { mutableIntStateOf(0) }
+    var streamLandscapeLoadingVisible by remember(currentRoute) { mutableStateOf(false) }
+    if (currentRoute is PlayerRoute || visiblePlayerEntries > 0 || streamLandscapeLoadingVisible) {
+        LockPlayerToLandscape()
+        HidePlayerSystemBars()
+    }
     val p2pSettingsUiState by remember {
         P2pSettingsRepository.ensureLoaded()
         P2pSettingsRepository.uiState
@@ -379,8 +415,9 @@ internal fun MainAppContent(
         liquidGlassNativeTabBarSupported,
         liquidGlassNativeTabBarEnabled,
         useNativeNavigation,
+        onActivate,
+        initialTab,
         currentRoute,
-        selectedTab,
     ) {
         NativeTabBridge.requestedTabs.collectLatest { requestedTab ->
             val requestedAppTab = requestedTab.toAppScreenTab()
@@ -425,10 +462,12 @@ internal fun MainAppContent(
         )
     }
 
-    LaunchedEffect(selectedTab) {
-        NativeTabBridge.publishSelectedTab(selectedTab.toNativeNavigationTab())
-        if (selectedTab != AppScreenTab.Search) {
-            searchFocusRequestCount = 0
+    LaunchedEffect(initialTab) {
+        snapshotFlow { selectedTab }.collectLatest { tab ->
+            NativeTabBridge.publishSelectedTab(tab.toNativeNavigationTab())
+            if (tab != AppScreenTab.Search) {
+                searchFocusRequestCount = 0
+            }
         }
     }
 
@@ -805,7 +844,7 @@ internal fun MainAppContent(
                 sendSkipSegments = shouldSendSkipSegments,
                 preferredLanguage = playerSettingsUiState.preferredSubtitleLanguage,
                 secondaryLanguage = playerSettingsUiState.secondaryPreferredSubtitleLanguage,
-                onOverlayMessage = { _ -> },
+                onOverlayMessage = { message -> StreamsRepository.setOverlayVisible(true, message) },
             )
             StreamsRepository.setOverlayVisible(false)
             return when (
@@ -845,7 +884,7 @@ internal fun MainAppContent(
                 sourceUrl = sourceUrl,
                 sourceHeaders = emptyMap(),
                 sourceResponseHeaders = emptyMap(),
-                externalSubtitles = emptyList(),
+                externalSubtitles = DownloadSubtitles.localSubtitles(sourceUrl),
                 streamType = null,
                 logo = item.logo,
                 poster = item.poster,
@@ -967,7 +1006,7 @@ internal fun MainAppContent(
                         sourceUrl = localSourceUrl,
                         sourceHeaders = emptyMap(),
                         sourceResponseHeaders = emptyMap(),
-                        externalSubtitles = emptyList(),
+                        externalSubtitles = DownloadSubtitles.localSubtitles(localSourceUrl),
                         logo = logo,
                         poster = poster,
                         background = background,
@@ -1254,6 +1293,7 @@ internal fun MainAppContent(
             ) {
             SharedTransitionLayout {
                 CompositionLocalProvider(
+                    LocalPosterClickAnchor provides if (posterNavigationEnabled) posterNavigation::prepare else null,
                     LocalUseNativeNavigation provides useNativeNavigation,
                     LocalNativeNavigationBarHidden provides (currentRoute?.hidesNavigationBar == true),
                 ) {
@@ -1277,22 +1317,41 @@ internal fun MainAppContent(
                         useNativeTabBar = useNativeTabBar,
                         liquidGlassNativeTabBarSupported = liquidGlassNativeTabBarSupported,
                         liquidGlassNativeTabBarEnabled = liquidGlassNativeTabBarEnabled,
-                        requests = AppTabRequests(
-                            homeScrollToTopRequests = homeScrollToTopRequests,
-                            searchScrollToTopRequests = searchScrollToTopRequests,
-                            libraryScrollToTopRequests = libraryScrollToTopRequests,
-                            settingsRootActionRequests = settingsRootActionRequests,
-                        ),
-                        state = AppTabState(
-                            searchListState = searchListState,
-                            homeContentGeneration = appContentGeneration,
-                            searchFocusRequestCount = searchFocusRequestCount,
-                            rootActionsEnabled = currentRoute is TabsRoute,
-                            animateHomeCollectionGifs = currentRoute is TabsRoute,
-                            libraryDisintegrationRequest = libraryDisintegrationRequests.current,
-                            continueWatchingDisintegrationRequest = continueWatchingDisintegrationRequests.current,
-                            requestedSettingsPageName = requestedSettingsPageName,
-                        ),
+                        requests = remember(
+                            homeScrollToTopRequests,
+                            searchScrollToTopRequests,
+                            libraryScrollToTopRequests,
+                            settingsRootActionRequests,
+                        ) {
+                            AppTabRequests(
+                                homeScrollToTopRequests = homeScrollToTopRequests,
+                                searchScrollToTopRequests = searchScrollToTopRequests,
+                                libraryScrollToTopRequests = libraryScrollToTopRequests,
+                                settingsRootActionRequests = settingsRootActionRequests,
+                            )
+                        },
+                        state = remember(
+                            searchListState,
+                            appContentGeneration,
+                            profileState.activeProfile?.profileIndex,
+                            searchFocusRequestCount,
+                            currentRoute is TabsRoute,
+                            libraryDisintegrationRequests.current,
+                            continueWatchingDisintegrationRequests.current,
+                            requestedSettingsPageName,
+                        ) {
+                            AppTabState(
+                                searchListState = searchListState,
+                                homeContentGeneration = appContentGeneration,
+                                profileId = profileState.activeProfile?.profileIndex,
+                                searchFocusRequestCount = searchFocusRequestCount,
+                                rootActionsEnabled = currentRoute is TabsRoute,
+                                animateHomeCollectionGifs = currentRoute is TabsRoute,
+                                libraryDisintegrationRequest = libraryDisintegrationRequests.current,
+                                continueWatchingDisintegrationRequest = continueWatchingDisintegrationRequests.current,
+                                requestedSettingsPageName = requestedSettingsPageName,
+                            )
+                        },
                         actions = { isTabletLayout ->
                             AppTabActions(
                                 onCatalogClick = onCatalogClick,
@@ -1431,11 +1490,13 @@ internal fun MainAppContent(
                         },
                         onTabSelected = ::handleRootTabClick,
                         onProfileSelected = { profile ->
-                            profileSwitchLoading = true
-                            NativeTabBridge.publishTabBarVisible(false)
-                            activateTab(AppScreenTab.Home)
-                            ProfileRepository.selectProfile(profile.profileIndex)
-                            SyncManager.pullAllForProfile(profile.profileIndex)
+                            if (profile.profileIndex != ProfileRepository.state.value.activeProfile?.profileIndex) {
+                                profileSwitchLoading = true
+                                NativeTabBridge.publishTabBarVisible(false)
+                                activateTab(AppScreenTab.Home)
+                                ProfileRepository.selectProfile(profile.profileIndex)
+                                SyncManager.pullAllForProfile(profile.profileIndex)
+                            }
                         },
                         onAddProfileRequested = onSwitchProfile,
                     )
@@ -1464,6 +1525,9 @@ internal fun MainAppContent(
                 entry<StreamRoute> { route ->
                     StreamDestination(
                         route = route,
+                        onLandscapeLoadingChanged = { visible ->
+                            if (currentRoute == route) streamLandscapeLoadingVisible = visible
+                        },
                         navController = navController,
                         p2pEnabled = p2pSettingsUiState.p2pEnabled,
                         openExternalPlayback = ::openExternalPlayback,
@@ -1483,6 +1547,12 @@ internal fun MainAppContent(
                         emptyMap()
                     },
                 ) { route ->
+                    if (!isIos) {
+                        DisposableEffect(route) {
+                            visiblePlayerEntries += 1
+                            onDispose { visiblePlayerEntries -= 1 }
+                        }
+                    }
                     PlayerDestination(
                         route = route,
                         navController = navController,
@@ -1608,7 +1678,11 @@ internal fun MainAppContent(
                         { key ->
                             routeDisposalDecorator.register(
                                 key = key,
-                                entry = provider(key),
+                                entry = if (posterNavigationEnabled) {
+                                    posterNavigationEntry(key, provider(key), posterNavigation)
+                                } else {
+                                    provider(key)
+                                },
                             )
                         }
                     },
