@@ -381,9 +381,13 @@ class AppUpdaterController internal constructor(
                 notes = """
                     A local preview of the new update experience.
 
-                    - The banner pushes the app content down.
-                    - Download progress fills the banner with the primary accent.
-                    - Release notes live behind the info button.
+                    ## Highlights
+                    - **Banner**: pushes the app content down.
+                    - **Progress**: download progress fills the banner with the *primary* accent, and this
+                      line wraps onto a second one to check the hanging indent.
+                      - Nested detail with `inline code` and ~~old behaviour~~.
+                    1. Release notes live behind the info button.
+                    2. Links open in the browser: [release page](https://github.com) or https://github.com.
                 """.trimIndent(),
                 releaseUrl = null,
                 assetName = "Nuvio-debug-preview.apk",

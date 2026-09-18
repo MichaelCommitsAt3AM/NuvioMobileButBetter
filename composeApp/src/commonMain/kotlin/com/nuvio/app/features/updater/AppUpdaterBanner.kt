@@ -360,14 +360,12 @@ private fun ReleaseNotesDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                Text(
-                    text = update.notes.ifBlank { stringResource(Res.string.updates_no_release_notes) },
+                ReleaseNotesContent(
+                    markdown = update.notes.ifBlank { stringResource(Res.string.updates_no_release_notes) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 420.dp)
                         .verticalScroll(rememberScrollState()),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
