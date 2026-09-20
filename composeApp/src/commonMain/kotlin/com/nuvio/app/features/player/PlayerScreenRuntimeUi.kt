@@ -145,6 +145,16 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     ) {
         val playerSurfaceSourceUrl = if (isP2pPlaybackActive) p2pResolvedSourceUrl else activeSourceUrl
         val initialPositionRequestKey = currentInitialPositionRequestKey()
+        // How much Auto would zoom to push the video's baked-in black bars out of view, worked out
+        // from the measured viewport and the bars the engine detected. 1f = nothing to offer.
+        val autoZoomValue = resolveAutoZoom(
+            bars = autoBars,
+            frameWidth = playbackSnapshot.videoWidth,
+            frameHeight = playbackSnapshot.videoHeight,
+            viewportWidthPx = layoutSize.width,
+            viewportHeightPx = layoutSize.height,
+        )
+        autoZoom = autoZoomValue
         if (playerSurfaceSourceUrl != null) {
             PlatformPlayerSurface(
                 sourceUrl = playerSurfaceSourceUrl,
@@ -158,6 +168,8 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 initialPositionMs = activeInitialPositionMs.takeIf { it > 0L },
                 initialPositionRequestKey = initialPositionRequestKey,
                 resizeMode = resizeMode,
+                autoZoom = if (resizeMode == PlayerResizeMode.Auto) autoZoomValue else 1f,
+                detectVideoBars = true,
                 onInitialPositionHandled = { key, handled ->
                     if (key == currentInitialPositionRequestKey()) {
                         initialSeekApplied = handled
@@ -169,6 +181,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 },
                 onSnapshot = { snapshot ->
                     playbackSnapshot = snapshot
+                    onVideoBarsReported(snapshot.videoBars)
                     refreshAudioTracksIfChanged()
                     if (!snapshot.isLoading) initialLoadCompleted = true
                     if (snapshot.isEnded) {
@@ -262,6 +275,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             displayedPositionMs = displayedPositionMs,
             metrics = metrics,
             resizeMode = resizeMode,
+            showAutoIndicator = autoOfferPending && autoZoom > 1f,
             isLocked = playerControlsLocked,
             showPlaybackControls = controlsVisible,
             onLockToggle = {

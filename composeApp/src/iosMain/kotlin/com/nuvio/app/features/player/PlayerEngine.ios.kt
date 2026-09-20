@@ -54,6 +54,8 @@ actual fun PlatformPlayerSurface(
     initialPositionMs: Long?,
     initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
+    autoZoom: Float,
+    detectVideoBars: Boolean,
     useNativeController: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
@@ -308,6 +310,10 @@ actual fun PlatformPlayerSurface(
     LaunchedEffect(bridge, resizeMode) {
         bridge.setResizeMode(
             when (resizeMode) {
+                // Auto is resolved to a concrete mode before it reaches the engine; this is a
+                // defensive fallback only, matching PlayerResizeMode.Fit. Video dimensions
+                // aren't yet exposed by the iOS bridge, so Auto can't resolve here anyway.
+                PlayerResizeMode.Auto -> 0
                 PlayerResizeMode.Fit -> 0
                 PlayerResizeMode.Fill -> 1
                 PlayerResizeMode.Zoom -> 2

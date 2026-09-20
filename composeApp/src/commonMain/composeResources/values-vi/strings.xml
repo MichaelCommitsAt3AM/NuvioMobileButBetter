@@ -453,6 +453,7 @@
     <string name="compose_player_reload">Tải lại</string>
     <string name="compose_player_reset">Đặt lại</string>
     <string name="compose_player_reset_defaults">Đặt lại mặc định</string>
+    <string name="compose_player_resize_auto">Tự động</string>
     <string name="compose_player_resize_fill">Lấp đầy</string>
     <string name="compose_player_resize_fit">Vừa màn hình</string>
     <string name="compose_player_resize_zoom">Phóng to</string>

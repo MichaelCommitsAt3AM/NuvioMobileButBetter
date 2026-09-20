@@ -450,6 +450,7 @@
     <string name="compose_player_reload">Vernieuwen</string>
     <string name="compose_player_reset">Herstellen</string>
     <string name="compose_player_reset_defaults">Standaardwaarden herstellen</string>
+    <string name="compose_player_resize_auto">Auto</string>
     <string name="compose_player_resize_fill">Vullen</string>
     <string name="compose_player_resize_fit">Passend</string>
     <string name="compose_player_resize_zoom">Zoom</string>

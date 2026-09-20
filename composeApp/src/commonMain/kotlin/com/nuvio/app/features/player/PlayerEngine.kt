@@ -77,6 +77,10 @@ expect fun PlatformPlayerSurface(
     initialPositionMs: Long? = null,
     initialPositionRequestKey: String? = null,
     resizeMode: PlayerResizeMode = PlayerResizeMode.Fit,
+    /** Extra scale applied when [resizeMode] is [PlayerResizeMode.Auto]; `1f` means plain Fit. */
+    autoZoom: Float = 1f,
+    /** Whether the engine should measure black bars baked into the frame (main player only). */
+    detectVideoBars: Boolean = false,
     useNativeController: Boolean = false,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit = { _, _ -> },
     onControllerReady: (PlayerEngineController) -> Unit,

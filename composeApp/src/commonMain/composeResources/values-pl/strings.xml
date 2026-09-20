@@ -351,6 +351,7 @@
     <string name="compose_player_reload">Odśwież</string>
     <string name="compose_player_reset">Resetuj</string>
     <string name="compose_player_reset_defaults">Przywróć domyślne</string>
+    <string name="compose_player_resize_auto">Auto</string>
     <string name="compose_player_resize_fill">Wypełnij</string>
     <string name="compose_player_resize_fit">Dopasuj</string>
     <string name="compose_player_resize_zoom">Powiększ</string>

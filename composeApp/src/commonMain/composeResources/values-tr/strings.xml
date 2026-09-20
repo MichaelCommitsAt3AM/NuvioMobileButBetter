@@ -375,6 +375,7 @@
     <string name="compose_player_reload">Yeniden Yükle</string>
     <string name="compose_player_reset">Sıfırla</string>
     <string name="compose_player_reset_defaults">Varsayılanlara dön</string>
+    <string name="compose_player_resize_auto">Otomatik</string>
     <string name="compose_player_resize_fill">Doldur</string>
     <string name="compose_player_resize_fit">Sığdır</string>
     <string name="compose_player_resize_zoom">Yakınlaştır</string>

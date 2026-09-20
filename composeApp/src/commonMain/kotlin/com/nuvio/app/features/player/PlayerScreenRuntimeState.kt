@@ -82,6 +82,7 @@ internal class PlayerScreenRuntime(
     var sliderEdgePadding: Dp = 0.dp
     var overlayBottomPadding: Dp = 0.dp
     var sideGestureSystemEdgeExclusionPx: Float = 0f
+    var resizeModeAutoLabel: String = ""
     var resizeModeFitLabel: String = ""
     var resizeModeFillLabel: String = ""
     var resizeModeZoomLabel: String = ""
@@ -125,6 +126,15 @@ internal class PlayerScreenRuntime(
     var activeInitialProgressFraction by mutableStateOf(initialProgressFraction)
     var shouldPlay by mutableStateOf(true)
     var resizeMode by mutableStateOf(playerSettingsUiState.resizeMode)
+
+    /** Black bars the engine measured in the current video's frame; null until confident. */
+    var autoBars by mutableStateOf<PlayerVideoBars?>(null)
+
+    /** Whether the user has already tried Auto for this video - the availability dot then stays off. */
+    var autoTried by mutableStateOf(false)
+
+    /** Latest zoom Auto would apply (1f = unavailable). Plain field: read in click handlers only. */
+    var autoZoom: Float = 1f
     var layoutSize by mutableStateOf(IntSize.Zero)
     var playbackSnapshot by mutableStateOf(PlayerPlaybackSnapshot())
     var playerController by mutableStateOf<PlayerEngineController?>(null)

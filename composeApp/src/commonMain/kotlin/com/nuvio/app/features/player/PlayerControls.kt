@@ -78,6 +78,7 @@ internal fun PlayerControlsShell(
     displayedPositionMs: Long,
     metrics: PlayerLayoutMetrics,
     resizeMode: PlayerResizeMode,
+    showAutoIndicator: Boolean = false,
     isLocked: Boolean,
     showPlaybackControls: Boolean = true,
     onLockToggle: () -> Unit,
@@ -186,6 +187,7 @@ internal fun PlayerControlsShell(
                     displayedPositionMs = displayedPositionMs,
                     metrics = metrics,
                     resizeMode = resizeMode,
+                    showAutoIndicator = showAutoIndicator,
                     onScrubChange = onScrubChange,
                     onScrubFinished = onScrubFinished,
                     onResizeModeClick = onResizeModeClick,
@@ -491,6 +493,7 @@ private fun ProgressControls(
     displayedPositionMs: Long,
     metrics: PlayerLayoutMetrics,
     resizeMode: PlayerResizeMode,
+    showAutoIndicator: Boolean,
     onScrubChange: (Long) -> Unit,
     onScrubFinished: (Long) -> Unit,
     onResizeModeClick: () -> Unit,
@@ -537,6 +540,7 @@ private fun ProgressControls(
                         label = stringResource(resizeMode.labelRes),
                         painter = aspectRatioPainter,
                         onClick = onResizeModeClick,
+                        showBadge = showAutoIndicator,
                     )
                     PlayerActionPillButton(
                         label = formatPlaybackSpeedLabel(playbackSnapshot.playbackSpeed),
@@ -768,37 +772,51 @@ private fun PlayerActionPillButton(
     onClick: () -> Unit,
     icon: ImageVector? = null,
     painter: Painter? = null,
+    showBadge: Boolean = false,
 ) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        when {
-            painter != null -> Icon(
-                painter = painter,
-                contentDescription = label,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
-            )
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(22.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when {
+                painter != null -> Icon(
+                    painter = painter,
+                    contentDescription = label,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp),
+                )
 
-            icon != null -> Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
+                icon != null -> Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.nuvioTypeScale.labelSm,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
             )
         }
-        Text(
-            text = label,
-            style = MaterialTheme.nuvioTypeScale.labelSm,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            softWrap = false,
-        )
+        if (showBadge) {
+            // Indicator only - the pill itself remains the one tap target.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 9.dp, end = 9.dp)
+                    .size(4.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF34C759)),
+            )
+        }
     }
 }

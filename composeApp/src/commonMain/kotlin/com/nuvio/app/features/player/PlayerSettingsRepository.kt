@@ -261,6 +261,7 @@ object PlayerSettingsRepository {
         showParentalGuide = PlayerSettingsStorage.loadShowParentalGuide() ?: true
         resizeMode = PlayerSettingsStorage.loadResizeMode()
             ?.let { runCatching { PlayerResizeMode.valueOf(it) }.getOrNull() }
+            ?.takeIf { it != PlayerResizeMode.Auto }
             ?: PlayerResizeMode.Fit
         holdToSpeedEnabled = PlayerSettingsStorage.loadHoldToSpeedEnabled() ?: true
         holdToSpeedValue = PlayerSettingsStorage.loadHoldToSpeedValue() ?: 2f
@@ -432,6 +433,8 @@ object PlayerSettingsRepository {
 
     fun setResizeMode(mode: PlayerResizeMode) {
         ensureLoaded()
+        // Auto is chosen per video (it needs bars detected first), so it is never a saved default.
+        if (mode == PlayerResizeMode.Auto) return
         if (resizeMode == mode) return
         resizeMode = mode
         publish()

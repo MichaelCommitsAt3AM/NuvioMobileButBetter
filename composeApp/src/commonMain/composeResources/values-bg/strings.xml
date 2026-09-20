@@ -450,6 +450,7 @@
     <string name="compose_player_reload">Презареди</string>
     <string name="compose_player_reset">Нулиране</string>
     <string name="compose_player_reset_defaults">Нулирай по подразбиране</string>
+    <string name="compose_player_resize_auto">Авто</string>
     <string name="compose_player_resize_fill">Запълни</string>
     <string name="compose_player_resize_fit">Побери</string>
     <string name="compose_player_resize_zoom">Мащабирай</string>

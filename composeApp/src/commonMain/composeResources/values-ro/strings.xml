@@ -372,6 +372,7 @@
     <string name="compose_player_reload">Reîncarcă</string>
     <string name="compose_player_reset">Resetează</string>
     <string name="compose_player_reset_defaults">Resetează la valorile implicite</string>
+    <string name="compose_player_resize_auto">Automat</string>
     <string name="compose_player_resize_fill">Umple</string>
     <string name="compose_player_resize_fit">Potrivește</string>
     <string name="compose_player_resize_zoom">Zoom</string>

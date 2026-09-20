@@ -372,6 +372,7 @@
     <string name="compose_player_reload">Znovu načíst</string>
     <string name="compose_player_reset">Reset</string>
     <string name="compose_player_reset_defaults">Obnovit výchozí</string>
+    <string name="compose_player_resize_auto">Auto</string>
     <string name="compose_player_resize_fill">Vyplnit</string>
     <string name="compose_player_resize_fit">Přizpůsobit</string>
     <string name="compose_player_resize_zoom">Přiblížit</string>

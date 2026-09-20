@@ -351,6 +351,7 @@
     <string name="compose_player_reload">Muat Ulang</string>
     <string name="compose_player_reset">Setelan Bawaan</string>
     <string name="compose_player_reset_defaults">Kembalikan ke Setelan Bawaan</string>
+    <string name="compose_player_resize_auto">Otomatis</string>
     <string name="compose_player_resize_fill">Penuh</string>
     <string name="compose_player_resize_fit">Sesuaikan</string>
     <string name="compose_player_resize_zoom">Perbesar</string>

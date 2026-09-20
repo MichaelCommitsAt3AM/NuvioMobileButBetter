@@ -372,6 +372,7 @@
     <string name="compose_player_reload">再読み込み</string>
     <string name="compose_player_reset">リセット</string>
     <string name="compose_player_reset_defaults">デフォルトに戻す</string>
+    <string name="compose_player_resize_auto">自動</string>
     <string name="compose_player_resize_fill">塗りつぶし</string>
     <string name="compose_player_resize_fit">フィット</string>
     <string name="compose_player_resize_zoom">ズーム</string>

@@ -207,6 +207,7 @@
     <string name="compose_player_reload">טען מחדש</string>
     <string name="compose_player_reset">אפס</string>
     <string name="compose_player_reset_defaults">אפס לברירות מחדל</string>
+    <string name="compose_player_resize_auto">אוטומטי</string>
     <string name="compose_player_resize_fill">מילוי</string>
     <string name="compose_player_resize_fit">התאמה</string>
     <string name="compose_player_resize_zoom">זום</string>

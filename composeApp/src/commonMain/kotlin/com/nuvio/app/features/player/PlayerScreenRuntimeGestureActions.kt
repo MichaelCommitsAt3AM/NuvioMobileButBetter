@@ -215,13 +215,43 @@ internal fun PlayerScreenRuntime.handleDoubleTapSeek(direction: PlayerSeekDirect
     }
 }
 
+/** True while the green "Auto is available" dot should show on the resize pill. */
+internal val PlayerScreenRuntime.autoOfferPending: Boolean
+    get() = autoBars != null && !autoTried && resizeMode != PlayerResizeMode.Auto
+
+/**
+ * Records what the engine reported about baked-in bars. Bars are per video: when the engine
+ * reports none (new source, or an engine that doesn't measure) the offer is withdrawn, and a
+ * previously chosen Auto falls back to the saved mode rather than staying selected with no effect.
+ */
+internal fun PlayerScreenRuntime.onVideoBarsReported(bars: PlayerVideoBars?) {
+    if (bars == null && autoBars != null) {
+        autoTried = false
+        if (resizeMode == PlayerResizeMode.Auto) resizeMode = playerSettingsUiState.resizeMode
+    }
+    if (bars != autoBars) autoBars = bars
+}
+
 internal fun PlayerScreenRuntime.cycleResizeMode() {
-    val nextMode = resizeMode.next()
+    val autoAvailable = autoZoom > 1f
+    // While the dot is showing, the next tap goes straight to Auto instead of walking the cycle.
+    val nextMode = if (autoOfferPending && autoAvailable) {
+        PlayerResizeMode.Auto
+    } else {
+        resizeMode.next(autoAvailable)
+    }
     resizeMode = nextMode
-    lastSyncedSettingsResizeMode = nextMode
-    PlayerSettingsRepository.setResizeMode(nextMode)
+    if (nextMode == PlayerResizeMode.Auto) {
+        // Auto is per-video and never saved: leaving the saved mode (and its sync marker) alone
+        // is what stops the settings sync from snapping the runtime back to it.
+        autoTried = true
+    } else {
+        lastSyncedSettingsResizeMode = nextMode
+        PlayerSettingsRepository.setResizeMode(nextMode)
+    }
     showGestureMessage(
         when (nextMode) {
+            PlayerResizeMode.Auto -> resizeModeAutoLabel
             PlayerResizeMode.Fit -> resizeModeFitLabel
             PlayerResizeMode.Fill -> resizeModeFillLabel
             PlayerResizeMode.Zoom -> resizeModeZoomLabel

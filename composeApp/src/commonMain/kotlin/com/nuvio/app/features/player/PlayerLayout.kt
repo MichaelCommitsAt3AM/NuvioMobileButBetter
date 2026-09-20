@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.compose_player_resize_auto
 import nuvio.composeapp.generated.resources.compose_player_resize_fill
 import nuvio.composeapp.generated.resources.compose_player_resize_fit
 import nuvio.composeapp.generated.resources.compose_player_resize_zoom
@@ -122,15 +123,21 @@ internal fun playerHorizontalSafePadding(): Dp {
     return if (left > right) left else right
 }
 
-internal fun PlayerResizeMode.next(): PlayerResizeMode =
+/**
+ * Cycle order for the resize pill: Fit -> Fill -> Zoom, plus Auto at the end only while Auto is
+ * available (bars were detected and removing them helps on this viewport).
+ */
+internal fun PlayerResizeMode.next(autoAvailable: Boolean = false): PlayerResizeMode =
     when (this) {
+        PlayerResizeMode.Auto -> PlayerResizeMode.Fit
         PlayerResizeMode.Fit -> PlayerResizeMode.Fill
         PlayerResizeMode.Fill -> PlayerResizeMode.Zoom
-        PlayerResizeMode.Zoom -> PlayerResizeMode.Fit
+        PlayerResizeMode.Zoom -> if (autoAvailable) PlayerResizeMode.Auto else PlayerResizeMode.Fit
     }
 
 internal val PlayerResizeMode.labelRes: StringResource
     get() = when (this) {
+        PlayerResizeMode.Auto -> Res.string.compose_player_resize_auto
         PlayerResizeMode.Fit -> Res.string.compose_player_resize_fit
         PlayerResizeMode.Fill -> Res.string.compose_player_resize_fill
         PlayerResizeMode.Zoom -> Res.string.compose_player_resize_zoom

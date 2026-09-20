@@ -113,6 +113,8 @@ actual fun PlatformPlayerSurface(
     initialPositionMs: Long?,
     initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
+    autoZoom: Float,
+    detectVideoBars: Boolean,
     useNativeController: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
@@ -150,6 +152,8 @@ actual fun PlatformPlayerSurface(
             initialPositionMs = initialPositionMs,
             initialPositionRequestKey = initialPositionRequestKey,
             resizeMode = resizeMode,
+            autoZoom = autoZoom,
+            detectVideoBars = detectVideoBars,
             useNativeController = useNativeController,
             onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = onControllerReady,
@@ -239,6 +243,8 @@ private fun ExoPlayerSurface(
     initialPositionMs: Long?,
     initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
+    autoZoom: Float,
+    detectVideoBars: Boolean,
     useNativeController: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
@@ -291,6 +297,13 @@ private fun ExoPlayerSurface(
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var videoAspectRatio by remember(playerSourceKey) { mutableStateOf(0f) }
     val latestVideoAspectRatio = rememberUpdatedState(videoAspectRatio)
+    // Black bars baked into the encoded frame; measured per source, reported through the snapshot.
+    var detectedVideoBars by remember(playerSourceKey) { mutableStateOf<PlayerVideoBars?>(null) }
+    val latestDetectedVideoBars = rememberUpdatedState(detectedVideoBars)
+    val latestAutoZoom = rememberUpdatedState(autoZoom)
+    val latestResizeMode = rememberUpdatedState(resizeMode)
+    val barDebugInfo = remember(playerSourceKey) { PlayerBarDebugInfo() }
+    val latestBarDebugInfo = rememberUpdatedState(barDebugInfo)
     var currentSubtitleStyle by remember { mutableStateOf(SubtitleStyleState.DEFAULT) }
     var decoderPriorityOverride by remember(playerSourceKey) { mutableStateOf<Int?>(null) }
     var fallbackStartPositionMs by remember(playerSourceKey) { mutableStateOf<Long?>(null) }
@@ -397,7 +410,7 @@ private fun ExoPlayerSurface(
             },
             shouldStripSdhProvider = { currentSubtitleStyle.stripSdh },
             videoBoundsFractionProvider = {
-                playerViewRef?.videoBoundsFraction(latestVideoAspectRatio.value)
+                playerViewRef?.videoBoundsFraction(latestVideoAspectRatio.value, latestAutoZoom.value)
             },
         )
             .setExtensionRendererMode(effectiveDecoderPriority)
@@ -502,7 +515,7 @@ private fun ExoPlayerSurface(
     }
 
     fun dispatchExoPlayerSnapshot() {
-        val snapshot = exoPlayer.snapshot()
+        val snapshot = exoPlayer.snapshot(latestDetectedVideoBars.value)
         latestOnSnapshot.value(snapshot)
         nowPlayingController.syncPlayback(snapshot)
     }
@@ -694,7 +707,7 @@ private fun ExoPlayerSurface(
                 if (videoSize.width > 0 && videoSize.height > 0) {
                     videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
                 }
-                latestOnSnapshot.value(exoPlayer.snapshot())
+                latestOnSnapshot.value(exoPlayer.snapshot(latestDetectedVideoBars.value))
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
@@ -989,6 +1002,44 @@ private fun ExoPlayerSurface(
         }
     }
 
+    // Measures black bars baked into the frame so Auto can offer to push them out of view. Runs
+    // until it is confident (or gives up), only while frames are actually playing, and never
+    // acts on its own - the result is just reported through the snapshot.
+    LaunchedEffect(exoPlayer, playerViewRef, detectVideoBars, playerSourceKey) {
+        if (!detectVideoBars) return@LaunchedEffect
+        val view = playerViewRef ?: return@LaunchedEffect
+        val detector = VideoBarDetector()
+        val debug = barDebugInfo
+        while (isActive && detector.result == BarDetectionResult.Pending) {
+            debug.nextIntervalMs = detector.nextIntervalMs()
+            delay(debug.nextIntervalMs)
+            if (!exoPlayer.isPlaying || exoPlayer.videoSize.width <= 0) {
+                debug.state = "waiting (paused / no frame)"
+                continue
+            }
+            debug.state = "sampling"
+            val sample = view.sampleFrameBars()
+            if (sample == null) {
+                debug.captureFailures++
+                continue
+            }
+            detector.add(sample)
+            debug.recordFrom(detector)
+        }
+        val result = detector.result
+        debug.bars = (result as? BarDetectionResult.Found)?.bars
+        debug.state = when (result) {
+            is BarDetectionResult.Found -> "FOUND"
+            BarDetectionResult.NoBars -> "gave up (no bars)"
+            BarDetectionResult.Pending -> "stopped"
+        }
+        (result as? BarDetectionResult.Found)?.let { found ->
+            Log.i(TAG, "video bars detected: ${found.bars}")
+            detectedVideoBars = found.bars
+            dispatchExoPlayerSnapshot()
+        }
+    }
+
     AndroidView(
         modifier = modifier,
         factory = { viewContext ->
@@ -998,6 +1049,17 @@ private fun ExoPlayerSurface(
                 player = exoPlayer
                 keepScreenOn = exoPlayer.shouldKeepPlayerScreenOn()
                 this.resizeMode = resizeMode.toExoResizeMode()
+                setContentZoom(autoZoom)
+                if (detectVideoBars) {
+                    installBarDebugOverlay(
+                        PlayerBarDebugSources(
+                            info = { latestBarDebugInfo.value },
+                            frameSize = { exoPlayer.videoDimensions() },
+                            autoZoom = { latestAutoZoom.value },
+                            resizeMode = { latestResizeMode.value },
+                        ),
+                    )
+                }
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                 playerViewRef = this
                 sidecarController.bindSubtitleView(this.subtitleView)
@@ -1014,6 +1076,7 @@ private fun ExoPlayerSurface(
             playerView.player = exoPlayer
             playerView.useController = useNativeController
             playerView.resizeMode = resizeMode.toExoResizeMode()
+            playerView.setContentZoom(autoZoom)
             playerViewRef = playerView
             sidecarController.bindSubtitleView(playerView.subtitleView)
             syncPlayerViewKeepScreenOn()
@@ -1493,6 +1556,9 @@ private class NuvioLibmpvView(
     fun applyResizeMode(resizeMode: PlayerResizeMode) {
         executeMpv {
             when (resizeMode) {
+                // Auto is resolved to a concrete mode before it reaches the engine; this is a
+                // defensive fallback only, matching PlayerResizeMode.Fit.
+                PlayerResizeMode.Auto,
                 PlayerResizeMode.Fit -> {
                     mpv.setPropertyDouble("panscan", 0.0)
                     mpv.setPropertyString("video-aspect-override", "no")
@@ -1807,7 +1873,7 @@ private const val MPV_SUBTITLE_FONT_SIZE_MIN = 36
 private const val MPV_SUBTITLE_FONT_SIZE_MAX = 122
 private const val MPV_SUBTITLE_OUTLINE_SIZE_SCALE = 1.5
 
-private fun ExoPlayer.snapshot(): PlayerPlaybackSnapshot {
+private fun ExoPlayer.snapshot(videoBars: PlayerVideoBars? = null): PlayerPlaybackSnapshot {
     val (videoWidth, videoHeight) = videoDimensions()
     return PlayerPlaybackSnapshot(
         isLoading = playbackState == Player.STATE_IDLE || playbackState == Player.STATE_BUFFERING,
@@ -1824,18 +1890,69 @@ private fun ExoPlayer.snapshot(): PlayerPlaybackSnapshot {
         // so isTransferHdr alone misses them entirely.
         isHdr = ColorInfo.isTransferHdr(videoFormat?.colorInfo) ||
             videoFormat?.sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION,
+        videoBars = videoBars,
     )
 }
 
 private fun ExoPlayer.videoDimensions(): Pair<Int, Int> {
-    val format = videoFormat ?: return videoSize.width to videoSize.height
-    val hasCrop = format.decodedWidth != Format.NO_VALUE &&
-        format.decodedHeight != Format.NO_VALUE &&
-        (format.decodedWidth > format.width || format.decodedHeight > format.height)
-    val baseWidth = if (hasCrop) format.width else (format.width.takeIf { it > 0 } ?: videoSize.width)
-    val baseHeight = if (hasCrop) format.height else (format.height.takeIf { it > 0 } ?: videoSize.height)
-    val ratio = format.pixelWidthHeightRatio
-    return if (ratio != 1f) (baseWidth * ratio).roundToInt() to baseHeight else baseWidth to baseHeight
+    val format = videoFormat
+        ?: return resolveVideoDimensions(
+            width = Format.NO_VALUE,
+            height = Format.NO_VALUE,
+            decodedWidth = Format.NO_VALUE,
+            decodedHeight = Format.NO_VALUE,
+            rotationDegrees = videoSize.unappliedRotationDegrees,
+            pixelWidthHeightRatio = videoSize.pixelWidthHeightRatio,
+            fallbackWidth = videoSize.width,
+            fallbackHeight = videoSize.height,
+        )
+    return resolveVideoDimensions(
+        width = format.width,
+        height = format.height,
+        decodedWidth = format.decodedWidth,
+        decodedHeight = format.decodedHeight,
+        rotationDegrees = format.rotationDegrees,
+        pixelWidthHeightRatio = format.pixelWidthHeightRatio,
+        fallbackWidth = videoSize.width,
+        fallbackHeight = videoSize.height,
+    )
+}
+
+/**
+ * Resolves the displayed (post-rotation, post-pixel-aspect-ratio) video dimensions from
+ * Media3's [Format]/[VideoSize] fields.
+ *
+ * [Format.width]/[Format.height] are the *coded* frame dimensions, before rotation is applied -
+ * a portrait-shot clip with `rotationDegrees = 90` reports as landscape there. [VideoSize] is
+ * already rotation-applied, so it's used as the shape reference: we compute the coded (PAR-
+ * corrected) size first, then swap width/height if the coded frame needs a quarter turn to match
+ * what's actually displayed.
+ */
+internal fun resolveVideoDimensions(
+    width: Int,
+    height: Int,
+    decodedWidth: Int,
+    decodedHeight: Int,
+    rotationDegrees: Int,
+    pixelWidthHeightRatio: Float,
+    fallbackWidth: Int,
+    fallbackHeight: Int,
+): Pair<Int, Int> {
+    val hasCrop = decodedWidth != Format.NO_VALUE &&
+        decodedHeight != Format.NO_VALUE &&
+        (decodedWidth > width || decodedHeight > height)
+    val baseWidth = if (hasCrop) width else (width.takeIf { it > 0 } ?: fallbackWidth)
+    val baseHeight = if (hasCrop) height else (height.takeIf { it > 0 } ?: fallbackHeight)
+    if (baseWidth <= 0 || baseHeight <= 0) return baseWidth to baseHeight
+
+    // PAR applies to the coded frame, so stretch first, then rotate.
+    val parWidth = if (pixelWidthHeightRatio > 0f && pixelWidthHeightRatio != 1f) {
+        (baseWidth * pixelWidthHeightRatio).roundToInt()
+    } else {
+        baseWidth
+    }
+
+    return if (rotationDegrees % 180 != 0) baseHeight to parWidth else parWidth to baseHeight
 }
 
 private fun ExoPlayer.shouldKeepPlayerScreenOn(): Boolean =
@@ -1935,6 +2052,9 @@ private fun PlaybackException.isDecoderFailure(): Boolean =
 
 private fun PlayerResizeMode.toExoResizeMode(): Int =
     when (this) {
+        // Auto is resolved to a concrete mode before it reaches the engine; this is a
+        // defensive fallback only, matching PlayerResizeMode.Fit.
+        PlayerResizeMode.Auto,
         PlayerResizeMode.Fit -> AspectRatioFrameLayout.RESIZE_MODE_FIT
         PlayerResizeMode.Fill -> AspectRatioFrameLayout.RESIZE_MODE_FILL
         PlayerResizeMode.Zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -2183,8 +2303,18 @@ private fun ExoPlayer.logCurrentTracks(context: String) {
     Log.d(TAG, "--- end logCurrentTracks ---")
 }
 
+/** The video rectangle after Auto zoom: same centre, [zoom] times larger (may exceed the view). */
+private fun RectF.scaledAboutCenter(zoom: Float): RectF {
+    if (zoom == 1f) return this
+    val centerX = centerX()
+    val centerY = centerY()
+    val halfWidth = width() / 2f * zoom
+    val halfHeight = height() / 2f * zoom
+    return RectF(centerX - halfWidth, centerY - halfHeight, centerX + halfWidth, centerY + halfHeight)
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
-private fun PlayerView.videoBoundsFraction(aspectRatio: Float): RectF? {
+private fun PlayerView.videoBoundsFraction(aspectRatio: Float, zoom: Float = 1f): RectF? {
     val subtitleView = this.subtitleView ?: return null
     val viewWidth = subtitleView.width.toFloat()
     val viewHeight = subtitleView.height.toFloat()
@@ -2192,7 +2322,7 @@ private fun PlayerView.videoBoundsFraction(aspectRatio: Float): RectF? {
 
     if (aspectRatio > 0f) {
         val parentRatio = viewWidth / viewHeight
-        return if (parentRatio > aspectRatio) {
+        val fitRect = if (parentRatio > aspectRatio) {
             val fitW = viewHeight * aspectRatio
             val leftPx = (viewWidth - fitW) / 2f
             RectF(leftPx / viewWidth, 0f, (leftPx + fitW) / viewWidth, 1f)
@@ -2201,6 +2331,7 @@ private fun PlayerView.videoBoundsFraction(aspectRatio: Float): RectF? {
             val topPx = (viewHeight - fitH) / 2f
             RectF(0f, topPx / viewHeight, 1f, (topPx + fitH) / viewHeight)
         }
+        return fitRect.scaledAboutCenter(zoom)
     }
 
     val contentFrame = getTag(androidx.media3.ui.R.id.exo_content_frame) as? AspectRatioFrameLayout

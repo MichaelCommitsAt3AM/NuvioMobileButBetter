@@ -71,6 +71,7 @@ object PlayerLaunchStore {
 }
 
 enum class PlayerResizeMode {
+    Auto,
     Fit,
     Fill,
     Zoom,
@@ -220,6 +221,18 @@ data class PlayerPlaybackSnapshot(
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val isHdr: Boolean = false,
+    /** Black bars baked into the encoded frame, once an engine has confidently measured them. */
+    val videoBars: PlayerVideoBars? = null,
+)
+
+/**
+ * Black bars encoded into the video frame itself, as fractions of the frame height (0..0.5) - so
+ * they stay valid across resolutions, viewports and rotation. Container metadata cannot report
+ * these: a 2:1 picture inside a 1920x1080 frame still reports 16:9.
+ */
+data class PlayerVideoBars(
+    val topFraction: Float,
+    val bottomFraction: Float,
 )
 
 data class PlayerNowPlayingInfo(

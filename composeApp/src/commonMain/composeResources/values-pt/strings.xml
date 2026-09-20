@@ -367,6 +367,7 @@
     <string name="compose_player_reload">Recarregar</string>
     <string name="compose_player_reset">Repor</string>
     <string name="compose_player_reset_defaults">Repor predefinições</string>
+    <string name="compose_player_resize_auto">Automático</string>
     <string name="compose_player_resize_fill">Preencher</string>
     <string name="compose_player_resize_fit">Ajustar</string>
     <string name="compose_player_resize_zoom">Zoom</string>

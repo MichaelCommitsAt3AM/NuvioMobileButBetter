@@ -388,6 +388,7 @@
     <string name="compose_player_reload">إعادة تحميل</string>
     <string name="compose_player_reset">إعادة ضبط</string>
     <string name="compose_player_reset_defaults">استعادة الافتراضيات</string>
+    <string name="compose_player_resize_auto">تلقائي</string>
     <string name="compose_player_resize_fill">ملء</string>
     <string name="compose_player_resize_fit">ملاءمة</string>
     <string name="compose_player_resize_zoom">تكبير</string>

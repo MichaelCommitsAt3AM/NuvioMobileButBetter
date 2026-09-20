@@ -336,6 +336,7 @@
     <string name="compose_player_fetch_subtitles">Koppints a feliratok lekéréséhez</string>
     <string name="compose_player_go_back">Visszalépés</string>
     <string name="compose_player_reset_defaults">Alapértelmezések visszaállítása</string>
+    <string name="compose_player_resize_auto">Automatikus</string>
     <string name="compose_player_resize_fill">Kitöltés</string>
     <string name="compose_player_resize_fit">Illesztés</string>
     <string name="compose_player_resize_zoom">Nagyítás</string>

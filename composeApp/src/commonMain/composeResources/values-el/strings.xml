@@ -226,6 +226,7 @@
     <string name="compose_player_fetch_subtitles">Πατήστε για λήψη υποτίτλων</string>
     <string name="compose_player_go_back">Πίσω</string>
     <string name="compose_player_reset_defaults">Επαναφορά προεπιλογών</string>
+    <string name="compose_player_resize_auto">Αυτόματο</string>
     <string name="compose_player_resize_fill">Πλήρωση</string>
     <string name="compose_player_resize_fit">Προσαρμογή</string>
     <string name="compose_player_resize_zoom">Ζουμ</string>
