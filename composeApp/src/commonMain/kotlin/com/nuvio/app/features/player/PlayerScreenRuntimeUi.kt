@@ -146,9 +146,10 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         val playerSurfaceSourceUrl = if (isP2pPlaybackActive) p2pResolvedSourceUrl else activeSourceUrl
         val initialPositionRequestKey = currentInitialPositionRequestKey()
         // How much Auto would zoom to push the video's baked-in black bars out of view, worked out
-        // from the measured viewport and the bars the engine detected. 1f = nothing to offer.
+        // from the measured viewport and the bars the engine detected (or, until it has, the bars
+        // remembered for this season). 1f = nothing to offer.
         val autoZoomValue = resolveAutoZoom(
-            bars = autoBars,
+            bars = effectiveAutoBars(playbackSnapshot.videoWidth, playbackSnapshot.videoHeight),
             frameWidth = playbackSnapshot.videoWidth,
             frameHeight = playbackSnapshot.videoHeight,
             viewportWidthPx = layoutSize.width,
@@ -182,6 +183,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 onSnapshot = { snapshot ->
                     playbackSnapshot = snapshot
                     onVideoBarsReported(snapshot.videoBars)
+                    if (snapshot.videoBarsAbsent) onVideoBarsAbsent()
                     refreshAudioTracksIfChanged()
                     if (!snapshot.isLoading) initialLoadCompleted = true
                     if (snapshot.isEnded) {

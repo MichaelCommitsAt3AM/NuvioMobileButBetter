@@ -130,6 +130,12 @@ internal class PlayerScreenRuntime(
     /** Black bars the engine measured in the current video's frame; null until confident. */
     var autoBars by mutableStateOf<PlayerVideoBars?>(null)
 
+    /**
+     * Auto remembered for this season/title, with the bars an earlier episode measured. Zooms a
+     * new episode on Auto until its own [autoBars] arrive; null when Auto isn't remembered here.
+     */
+    var rememberedAutoAspect by mutableStateOf<RememberedAutoAspect?>(null)
+
     /** Whether the user has already tried Auto for this video - the availability dot then stays off. */
     var autoTried by mutableStateOf(false)
 

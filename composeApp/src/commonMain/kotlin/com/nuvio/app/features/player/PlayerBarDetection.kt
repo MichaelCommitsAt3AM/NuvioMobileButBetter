@@ -114,6 +114,13 @@ internal class VideoBarDetector(private val config: BarDetectorConfig = BarDetec
 
     val sampleCount: Int get() = total
 
+    /**
+     * A full window agreed on no bars. Not a result (a 4:3 prologue can precede the real framing),
+     * but enough to stop applying bars remembered from another episode.
+     */
+    var sawNoBars: Boolean = false
+        private set
+
     /** What the detector last saw, for diagnostics. */
     var lastSample: BarSample? = null
         private set
@@ -161,7 +168,10 @@ internal class VideoBarDetector(private val config: BarDetectorConfig = BarDetec
         val minBottom = window.minOf { it.bottom }
         val maxBottom = window.maxOf { it.bottom }
         if (max(maxTop - minTop, maxBottom - minBottom) > config.maxSpread) return
-        if (min(minTop, minBottom) < config.minBar) return
+        if (min(minTop, minBottom) < config.minBar) {
+            sawNoBars = true
+            return
+        }
         result = BarDetectionResult.Found(PlayerVideoBars(topFraction = minTop, bottomFraction = minBottom))
     }
 }

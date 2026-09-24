@@ -10,6 +10,7 @@ import org.robolectric.annotation.Config
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -67,6 +68,59 @@ class PlayerAutoAspectMemoryTest {
     }
 
     @Test
+    fun barsMeasuredOnAutoZoomTheNextEpisodeImmediately() {
+        val runtime = seriesRuntime(season = 1, episode = 1)
+        PlayerAutoAspectMemory.setRemembered(runtime.autoAspectScope, true)
+        runtime.resetIdentityStateIfNeeded()
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(videoWidth = 1920, videoHeight = 1080)
+        runtime.onVideoBarsReported(bars)
+
+        runtime.enterEpisode(season = 1, episode = 2)
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+        assertNull(runtime.autoBars)
+        assertEquals(bars, runtime.effectiveAutoBars(frameWidth = 1920, frameHeight = 1080))
+        // Same shape at another resolution still matches: bars are fractions of the frame.
+        assertEquals(bars, runtime.effectiveAutoBars(frameWidth = 1280, frameHeight = 720))
+    }
+
+    @Test
+    fun rememberedBarsSkipAFrameOfAnotherShape() {
+        val runtime = seriesRuntime(season = 1, episode = 1)
+        PlayerAutoAspectMemory.rememberBars(runtime.autoAspectScope, bars, frameWidth = 1920, frameHeight = 1080)
+
+        runtime.enterEpisode(season = 1, episode = 2)
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+        assertNull(runtime.effectiveAutoBars(frameWidth = 1920, frameHeight = 800))
+    }
+
+    @Test
+    fun aPictureWithNoBarsDropsRememberedBarsButKeepsAuto() {
+        val runtime = seriesRuntime(season = 1, episode = 1)
+        PlayerAutoAspectMemory.rememberBars(runtime.autoAspectScope, bars, frameWidth = 1920, frameHeight = 1080)
+
+        runtime.enterEpisode(season = 1, episode = 2)
+        runtime.onVideoBarsAbsent()
+        assertNull(runtime.effectiveAutoBars(frameWidth = 1920, frameHeight = 1080))
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+    }
+
+    @Test
+    fun theEpisodesOwnBarsWinOverRememberedOnes() {
+        val runtime = seriesRuntime(season = 1, episode = 1)
+        PlayerAutoAspectMemory.rememberBars(runtime.autoAspectScope, bars, frameWidth = 1920, frameHeight = 1080)
+        val ownBars = PlayerVideoBars(topFraction = 0.05f, bottomFraction = 0.05f)
+
+        runtime.enterEpisode(season = 1, episode = 2)
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(videoWidth = 1920, videoHeight = 1080)
+        runtime.onVideoBarsReported(ownBars)
+        assertEquals(ownBars, runtime.effectiveAutoBars(frameWidth = 1920, frameHeight = 1080))
+
+        // ...and become what the following episode starts from.
+        runtime.enterEpisode(season = 1, episode = 3)
+        assertEquals(ownBars, runtime.effectiveAutoBars(frameWidth = 1920, frameHeight = 1080))
+    }
+
+    @Test
     fun forgettingAutoReturnsTheSeasonToFit() {
         val runtime = seriesRuntime(season = 1, episode = 1)
         PlayerAutoAspectMemory.setRemembered(runtime.autoAspectScope, true)
@@ -75,6 +129,8 @@ class PlayerAutoAspectMemoryTest {
         runtime.enterEpisode(season = 1, episode = 2)
         assertEquals(PlayerResizeMode.Fit, runtime.resizeMode)
     }
+
+    private val bars = PlayerVideoBars(topFraction = 0.12f, bottomFraction = 0.12f)
 
     private fun PlayerScreenRuntime.enterEpisode(season: Int, episode: Int) {
         activeSeasonNumber = season

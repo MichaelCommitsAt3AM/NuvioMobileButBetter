@@ -223,6 +223,8 @@ data class PlayerPlaybackSnapshot(
     val isHdr: Boolean = false,
     /** Black bars baked into the encoded frame, once an engine has confidently measured them. */
     val videoBars: PlayerVideoBars? = null,
+    /** The engine saw a steady picture with no bars (still measuring; a later scene may have some). */
+    val videoBarsAbsent: Boolean = false,
 )
 
 /**

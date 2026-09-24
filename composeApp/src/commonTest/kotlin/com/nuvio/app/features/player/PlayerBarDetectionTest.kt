@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -137,6 +138,23 @@ class PlayerBarDetectionTest {
         val detector = VideoBarDetector()
         detector.feed(*Array(20) { sample(0f) })
         assertEquals(BarDetectionResult.Pending, detector.result)
+    }
+
+    @Test
+    fun `a steady window of zero-bar samples is flagged without ending detection`() {
+        val detector = VideoBarDetector()
+        detector.feed(*Array(4) { sample(0f) })
+        assertFalse(detector.sawNoBars)
+        detector.feed(sample(0f))
+        assertTrue(detector.sawNoBars)
+        assertEquals(BarDetectionResult.Pending, detector.result)
+    }
+
+    @Test
+    fun `letterboxed samples never flag no bars`() {
+        val detector = VideoBarDetector()
+        detector.feed(*Array(5) { sample(0.0556f) })
+        assertFalse(detector.sawNoBars)
     }
 
     @Test

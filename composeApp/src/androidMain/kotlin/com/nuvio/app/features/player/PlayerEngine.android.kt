@@ -301,6 +301,9 @@ private fun ExoPlayerSurface(
     // Black bars baked into the encoded frame; measured per source, reported through the snapshot.
     var detectedVideoBars by remember(playerSourceKey) { mutableStateOf<PlayerVideoBars?>(null) }
     val latestDetectedVideoBars = rememberUpdatedState(detectedVideoBars)
+    // A steady picture with no bars was seen; lets bars remembered from another episode be dropped.
+    var detectedVideoBarsAbsent by remember(playerSourceKey) { mutableStateOf(false) }
+    val latestDetectedVideoBarsAbsent = rememberUpdatedState(detectedVideoBarsAbsent)
     val latestAutoZoom = rememberUpdatedState(autoZoom)
     val latestResizeMode = rememberUpdatedState(resizeMode)
     val barDebugInfo = remember(playerSourceKey) { PlayerBarDebugInfo() }
@@ -528,7 +531,7 @@ private fun ExoPlayerSurface(
     }
 
     fun dispatchExoPlayerSnapshot() {
-        val snapshot = exoPlayer.snapshot(latestDetectedVideoBars.value)
+        val snapshot = exoPlayer.snapshot(latestDetectedVideoBars.value, latestDetectedVideoBarsAbsent.value)
         latestOnSnapshot.value(snapshot)
         nowPlayingController.syncPlayback(snapshot)
     }
@@ -734,7 +737,7 @@ private fun ExoPlayerSurface(
                 if (videoSize.width > 0 && videoSize.height > 0) {
                     videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
                 }
-                latestOnSnapshot.value(exoPlayer.snapshot(latestDetectedVideoBars.value))
+                latestOnSnapshot.value(exoPlayer.snapshot(latestDetectedVideoBars.value, latestDetectedVideoBarsAbsent.value))
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
@@ -1060,6 +1063,10 @@ private fun ExoPlayerSurface(
             }
             detector.add(sample)
             debug.recordFrom(detector)
+            if (detector.sawNoBars && !detectedVideoBarsAbsent) {
+                detectedVideoBarsAbsent = true
+                dispatchExoPlayerSnapshot()
+            }
         }
         val result = detector.result
         debug.bars = (result as? BarDetectionResult.Found)?.bars
@@ -1920,7 +1927,10 @@ private const val MPV_SUBTITLE_FONT_SIZE_MIN = 36
 private const val MPV_SUBTITLE_FONT_SIZE_MAX = 122
 private const val MPV_SUBTITLE_OUTLINE_SIZE_SCALE = 1.5
 
-private fun ExoPlayer.snapshot(videoBars: PlayerVideoBars? = null): PlayerPlaybackSnapshot {
+private fun ExoPlayer.snapshot(
+    videoBars: PlayerVideoBars? = null,
+    videoBarsAbsent: Boolean = false,
+): PlayerPlaybackSnapshot {
     val (videoWidth, videoHeight) = videoDimensions()
     return PlayerPlaybackSnapshot(
         isLoading = playbackState == Player.STATE_IDLE || playbackState == Player.STATE_BUFFERING,
@@ -1938,6 +1948,7 @@ private fun ExoPlayer.snapshot(videoBars: PlayerVideoBars? = null): PlayerPlayba
         isHdr = ColorInfo.isTransferHdr(videoFormat?.colorInfo) ||
             videoFormat?.sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION,
         videoBars = videoBars,
+        videoBarsAbsent = videoBarsAbsent,
     )
 }
 
