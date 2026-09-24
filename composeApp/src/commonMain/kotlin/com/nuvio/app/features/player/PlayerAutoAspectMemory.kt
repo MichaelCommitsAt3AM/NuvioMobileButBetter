@@ -33,18 +33,25 @@ internal data class RememberedAutoAspect(
  * remembered opens on the saved mode (Fit by default). Local only - deliberately left out of the
  * settings sync payload, since whether Auto helps depends on this device's screen.
  *
- * Stored as one string per scope: `scope`, or `scope|top|bottom|frameAspect` once bars are known.
+ * Stored as one string per scope: `scope`, or `scope|top|bottom|frameAspect` once bars are known,
+ * or `scope|off` where the user switched away from Auto (so switching to it automatically stops).
  */
 internal object PlayerAutoAspectMemory {
     private const val SEPARATOR = '|'
+    private const val DECLINED = "off"
 
     fun scopeKey(parentMetaType: String, parentMetaId: String, seasonNumber: Int?): String =
         if (seasonNumber != null) "$parentMetaId:s$seasonNumber" else "$parentMetaType:$parentMetaId"
 
     fun recall(scope: String): RememberedAutoAspect? =
-        entries().firstOrNull { it.scope() == scope }?.let(::parse)
+        entry(scope)?.let(::parse)
 
     fun isRemembered(scope: String): Boolean = recall(scope) != null
+
+    /** The user left Auto in this scope: don't switch to it automatically here again. */
+    fun isDeclined(scope: String): Boolean = entry(scope) == "$scope$SEPARATOR$DECLINED"
+
+    fun decline(scope: String) = write(scope, "$scope$SEPARATOR$DECLINED")
 
     fun setRemembered(scope: String, remembered: Boolean) {
         if (remembered && isRemembered(scope)) return
@@ -60,6 +67,8 @@ internal object PlayerAutoAspectMemory {
 
     private fun entries(): Set<String> = PlayerSettingsStorage.loadAutoAspectScopes().orEmpty()
 
+    private fun entry(scope: String): String? = entries().firstOrNull { it.scope() == scope }
+
     private fun write(scope: String, entry: String?) {
         val current = entries()
         val updated = current.filterNot { it.scope() == scope }.toSet() + listOfNotNull(entry)
@@ -68,8 +77,9 @@ internal object PlayerAutoAspectMemory {
 
     private fun String.scope(): String = substringBefore(SEPARATOR)
 
-    private fun parse(entry: String): RememberedAutoAspect {
+    private fun parse(entry: String): RememberedAutoAspect? {
         val parts = entry.split(SEPARATOR)
+        if (parts.size == 2 && parts[1] == DECLINED) return null
         if (parts.size != 4) return RememberedAutoAspect()
         val top = parts[1].toFloatOrNull()
         val bottom = parts[2].toFloatOrNull()

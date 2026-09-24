@@ -23,6 +23,7 @@ actual object PlayerSettingsStorage {
     private const val showParentalGuideKey = "show_parental_guide"
     private const val resizeModeKey = "resize_mode"
     private const val autoAspectScopesKey = "auto_aspect_scopes"
+    private const val autoSwitchToAutoAspectKey = "auto_switch_to_auto_aspect"
     private const val holdToSpeedEnabledKey = "hold_to_speed_enabled"
     private const val holdToSpeedValueKey = "hold_to_speed_value"
     private const val touchGesturesEnabledKey = "touch_gestures_enabled"
@@ -263,6 +264,17 @@ actual object PlayerSettingsStorage {
 
     actual fun saveAutoAspectScopes(scopes: Set<String>) {
         NSUserDefaults.standardUserDefaults.setObject(scopes.toList(), forKey = ProfileScopedKey.of(autoAspectScopesKey))
+    }
+
+    // Device-local like the Auto memory above: left out of the sync payload on purpose.
+    actual fun loadAutoSwitchToAutoAspect(): Boolean? {
+        val defaults = NSUserDefaults.standardUserDefaults
+        val key = ProfileScopedKey.of(autoSwitchToAutoAspectKey)
+        return if (defaults.objectForKey(key) != null) defaults.boolForKey(key) else null
+    }
+
+    actual fun saveAutoSwitchToAutoAspect(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(autoSwitchToAutoAspectKey))
     }
 
     actual fun loadHoldToSpeedEnabled(): Boolean? {

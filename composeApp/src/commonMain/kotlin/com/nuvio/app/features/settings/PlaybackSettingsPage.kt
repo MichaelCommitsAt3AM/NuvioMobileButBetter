@@ -369,6 +369,17 @@ private fun PlaybackSettingsSection(
                     onCheckedChange = PlayerSettingsRepository::setPauseOverlayEnabled,
                 )
                 SettingsGroupDivider(isTablet = isTablet)
+                // Only Android's ExoPlayer measures baked-in bars, so there is nothing to switch on iOS.
+                if (!isIos) {
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_auto_remove_black_bars),
+                        description = stringResource(Res.string.settings_playback_auto_remove_black_bars_description),
+                        checked = autoPlayPlayerSettings.autoSwitchToAutoAspect,
+                        isTablet = isTablet,
+                        onCheckedChange = PlayerSettingsRepository::setAutoSwitchToAutoAspect,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                }
                 SettingsSwitchRow(
                     title = stringResource(Res.string.settings_playback_parental_guide),
                     description = stringResource(Res.string.settings_playback_parental_guide_description),

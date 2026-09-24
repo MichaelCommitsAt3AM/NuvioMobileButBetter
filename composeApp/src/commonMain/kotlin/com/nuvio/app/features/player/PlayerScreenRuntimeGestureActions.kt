@@ -253,6 +253,38 @@ private fun PlayerScreenRuntime.rememberAutoBars(bars: PlayerVideoBars) {
     )
 }
 
+/**
+ * Auto is never the saved default (it needs bars detected first); it is remembered for this
+ * season/title only, so the next episodes open on it too.
+ */
+private fun PlayerScreenRuntime.selectAuto() {
+    resizeMode = PlayerResizeMode.Auto
+    autoTried = true
+    PlayerAutoAspectMemory.setRemembered(autoAspectScope, true)
+    autoBars?.let { rememberAutoBars(it) }
+}
+
+/**
+ * With "Remove black bars automatically" on, moves a video still on Fit to Auto once its own bars
+ * are found and worth zooming. Never after the user has tried Auto on this video or switched away
+ * from it this season, and never from Fill or Zoom, which are deliberate choices.
+ */
+internal fun PlayerScreenRuntime.switchToAutoIfBarsFound() {
+    if (!playerSettingsUiState.autoSwitchToAutoAspect) return
+    if (resizeMode != PlayerResizeMode.Fit || autoTried) return
+    val bars = autoBars ?: return
+    val zoom = resolveAutoZoom(
+        bars = bars,
+        frameWidth = playbackSnapshot.videoWidth,
+        frameHeight = playbackSnapshot.videoHeight,
+        viewportWidthPx = layoutSize.width,
+        viewportHeightPx = layoutSize.height,
+    )
+    if (zoom <= 1f || PlayerAutoAspectMemory.isDeclined(autoAspectScope)) return
+    selectAuto()
+    showGestureMessage(resizeModeAutoLabel)
+}
+
 /** Where a chosen Auto is remembered: the current season for series, the title otherwise. */
 internal val PlayerScreenRuntime.autoAspectScope: String
     get() = PlayerAutoAspectMemory.scopeKey(
@@ -279,21 +311,20 @@ internal fun PlayerScreenRuntime.applyRememberedResizeMode() {
 
 internal fun PlayerScreenRuntime.cycleResizeMode() {
     val autoAvailable = autoZoom > 1f
+    val leavingAuto = resizeMode == PlayerResizeMode.Auto
     // While the dot is showing, the next tap goes straight to Auto instead of walking the cycle.
     val nextMode = if (autoOfferPending && autoAvailable) {
         PlayerResizeMode.Auto
     } else {
         resizeMode.next(autoAvailable)
     }
-    resizeMode = nextMode
     if (nextMode == PlayerResizeMode.Auto) {
-        // Auto is never the saved default (it needs bars detected first); it is remembered for
-        // this season/title only, so the next episodes open on it too.
-        autoTried = true
-        PlayerAutoAspectMemory.setRemembered(autoAspectScope, true)
-        autoBars?.let { rememberAutoBars(it) }
+        selectAuto()
     } else {
-        PlayerAutoAspectMemory.setRemembered(autoAspectScope, false)
+        resizeMode = nextMode
+        // Leaving Auto by hand is a "no" for this season/title: the automatic switch won't bring
+        // it back, and the next episodes open on the saved mode again.
+        if (leavingAuto) PlayerAutoAspectMemory.decline(autoAspectScope)
         rememberedAutoAspect = null
         lastSyncedSettingsResizeMode = nextMode
         PlayerSettingsRepository.setResizeMode(nextMode)

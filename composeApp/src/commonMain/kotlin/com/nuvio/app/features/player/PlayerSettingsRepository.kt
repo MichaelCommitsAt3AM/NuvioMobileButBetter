@@ -38,6 +38,8 @@ data class PlayerSettingsUiState(
     val pauseOverlayEnabled: Boolean = true,
     val showParentalGuide: Boolean = true,
     val resizeMode: PlayerResizeMode = PlayerResizeMode.Fit,
+    /** Switch Fit to Auto on its own once a video's baked-in bars are found. Device-local. */
+    val autoSwitchToAutoAspect: Boolean = true,
     val holdToSpeedEnabled: Boolean = true,
     val holdToSpeedValue: Float = 2f,
     val touchGesturesEnabled: Boolean = true,
@@ -111,6 +113,7 @@ object PlayerSettingsRepository {
     private var pauseOverlayEnabled = true
     private var showParentalGuide = true
     private var resizeMode = PlayerResizeMode.Fit
+    private var autoSwitchToAutoAspect = true
     private var holdToSpeedEnabled = true
     private var holdToSpeedValue = 2f
     private var touchGesturesEnabled = true
@@ -189,6 +192,7 @@ object PlayerSettingsRepository {
         pauseOverlayEnabled = true
         showParentalGuide = true
         resizeMode = PlayerResizeMode.Fit
+        autoSwitchToAutoAspect = true
         holdToSpeedEnabled = true
         holdToSpeedValue = 2f
         touchGesturesEnabled = true
@@ -263,6 +267,7 @@ object PlayerSettingsRepository {
             ?.let { runCatching { PlayerResizeMode.valueOf(it) }.getOrNull() }
             ?.takeIf { it != PlayerResizeMode.Auto }
             ?: PlayerResizeMode.Fit
+        autoSwitchToAutoAspect = PlayerSettingsStorage.loadAutoSwitchToAutoAspect() ?: true
         holdToSpeedEnabled = PlayerSettingsStorage.loadHoldToSpeedEnabled() ?: true
         holdToSpeedValue = PlayerSettingsStorage.loadHoldToSpeedValue() ?: 2f
         touchGesturesEnabled = PlayerSettingsStorage.loadTouchGesturesEnabled() ?: true
@@ -421,6 +426,14 @@ object PlayerSettingsRepository {
         pauseOverlayEnabled = enabled
         publish()
         PlayerSettingsStorage.savePauseOverlayEnabled(enabled)
+    }
+
+    fun setAutoSwitchToAutoAspect(enabled: Boolean) {
+        ensureLoaded()
+        if (autoSwitchToAutoAspect == enabled) return
+        autoSwitchToAutoAspect = enabled
+        publish()
+        PlayerSettingsStorage.saveAutoSwitchToAutoAspect(enabled)
     }
 
     fun setShowParentalGuide(enabled: Boolean) {
@@ -1009,6 +1022,7 @@ object PlayerSettingsRepository {
             pauseOverlayEnabled = pauseOverlayEnabled,
             showParentalGuide = showParentalGuide,
             resizeMode = resizeMode,
+            autoSwitchToAutoAspect = autoSwitchToAutoAspect,
             holdToSpeedEnabled = holdToSpeedEnabled,
             holdToSpeedValue = holdToSpeedValue,
             touchGesturesEnabled = touchGesturesEnabled,

@@ -184,6 +184,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     playbackSnapshot = snapshot
                     onVideoBarsReported(snapshot.videoBars)
                     if (snapshot.videoBarsAbsent) onVideoBarsAbsent()
+                    switchToAutoIfBarsFound()
                     refreshAudioTracksIfChanged()
                     if (!snapshot.isLoading) initialLoadCompleted = true
                     if (snapshot.isEnded) {

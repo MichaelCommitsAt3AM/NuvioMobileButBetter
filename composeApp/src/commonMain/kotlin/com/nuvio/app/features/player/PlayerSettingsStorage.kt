@@ -15,6 +15,8 @@ internal expect object PlayerSettingsStorage {
     fun saveResizeMode(mode: String)
     fun loadAutoAspectScopes(): Set<String>?
     fun saveAutoAspectScopes(scopes: Set<String>)
+    fun loadAutoSwitchToAutoAspect(): Boolean?
+    fun saveAutoSwitchToAutoAspect(enabled: Boolean)
     fun loadHoldToSpeedEnabled(): Boolean?
     fun saveHoldToSpeedEnabled(enabled: Boolean)
     fun loadHoldToSpeedValue(): Float?

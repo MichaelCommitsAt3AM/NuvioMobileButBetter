@@ -3,6 +3,9 @@ package com.nuvio.app.features.player
 import android.app.Application
 import android.content.Context
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -10,7 +13,10 @@ import org.robolectric.annotation.Config
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -121,6 +127,84 @@ class PlayerAutoAspectMemoryTest {
     }
 
     @Test
+    fun fitSwitchesToAutoOnItsOwnOnceBarsAreFound() {
+        val runtime = seriesRuntime(season = 1, episode = 1).onPhoneScreen()
+        runtime.resetIdentityStateIfNeeded()
+        assertEquals(PlayerResizeMode.Fit, runtime.resizeMode)
+
+        runtime.reportBars(thinBars)
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+
+        // ...and the season now opens straight on Auto, with those bars.
+        runtime.enterEpisode(season = 1, episode = 2)
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+        assertEquals(thinBars, runtime.effectiveAutoBars(frameWidth = 1920, frameHeight = 1080))
+    }
+
+    @Test
+    fun autoSwitchIsOffWhenTheSettingIs() {
+        val runtime = seriesRuntime(season = 1, episode = 1).onPhoneScreen()
+        runtime.playerSettingsUiState = PlayerSettingsUiState(autoSwitchToAutoAspect = false)
+        runtime.resetIdentityStateIfNeeded()
+
+        runtime.reportBars(thinBars)
+        assertEquals(PlayerResizeMode.Fit, runtime.resizeMode)
+    }
+
+    @Test
+    fun autoSwitchLeavesFillAndZoomAlone() {
+        val runtime = seriesRuntime(season = 1, episode = 1).onPhoneScreen()
+        runtime.resetIdentityStateIfNeeded()
+        runtime.resizeMode = PlayerResizeMode.Zoom
+
+        runtime.reportBars(thinBars)
+        assertEquals(PlayerResizeMode.Zoom, runtime.resizeMode)
+    }
+
+    @Test
+    fun barsTooWideToZoomDoNotSwitch() {
+        val runtime = seriesRuntime(season = 1, episode = 1).onPhoneScreen()
+        runtime.resetIdentityStateIfNeeded()
+
+        // A scope picture wider than the phone: Fit already serves it, so Auto isn't offered.
+        runtime.reportBars(bars)
+        assertEquals(PlayerResizeMode.Fit, runtime.resizeMode)
+    }
+
+    @Test
+    fun leavingAutoByHandStopsTheAutoSwitchForTheSeason() {
+        val runtime = seriesRuntime(season = 1, episode = 1).onPhoneScreen()
+        runtime.resetIdentityStateIfNeeded()
+        runtime.reportBars(thinBars)
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+
+        runtime.cycleResizeMode()
+        assertNotEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+        assertTrue(PlayerAutoAspectMemory.isDeclined(runtime.autoAspectScope))
+
+        runtime.resizeMode = PlayerResizeMode.Fit
+        runtime.enterEpisode(season = 1, episode = 2)
+        runtime.reportBars(thinBars)
+        assertEquals(PlayerResizeMode.Fit, runtime.resizeMode)
+
+        // Another season is untouched.
+        runtime.enterEpisode(season = 2, episode = 1)
+        runtime.reportBars(thinBars)
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+    }
+
+    @Test
+    fun choosingAutoAgainClearsTheDecline() {
+        val runtime = seriesRuntime(season = 1, episode = 1)
+        PlayerAutoAspectMemory.decline(runtime.autoAspectScope)
+        PlayerAutoAspectMemory.setRemembered(runtime.autoAspectScope, true)
+
+        assertFalse(PlayerAutoAspectMemory.isDeclined(runtime.autoAspectScope))
+        runtime.enterEpisode(season = 1, episode = 2)
+        assertEquals(PlayerResizeMode.Auto, runtime.resizeMode)
+    }
+
+    @Test
     fun forgettingAutoReturnsTheSeasonToFit() {
         val runtime = seriesRuntime(season = 1, episode = 1)
         PlayerAutoAspectMemory.setRemembered(runtime.autoAspectScope, true)
@@ -131,6 +215,22 @@ class PlayerAutoAspectMemoryTest {
     }
 
     private val bars = PlayerVideoBars(topFraction = 0.12f, bottomFraction = 0.12f)
+
+    /** ~2:1 picture in a 16:9 frame: narrower than a 20:9 phone, so Auto zooms it (~1.14x). */
+    private val thinBars = PlayerVideoBars(topFraction = 0.06f, bottomFraction = 0.06f)
+
+    /** A 20:9 phone in landscape, with a scope the gesture feedback can launch on. */
+    private fun PlayerScreenRuntime.onPhoneScreen() = apply {
+        layoutSize = IntSize(2400, 1080)
+        scope = CoroutineScope(Dispatchers.Unconfined)
+    }
+
+    /** What the player does with each engine snapshot. */
+    private fun PlayerScreenRuntime.reportBars(bars: PlayerVideoBars) {
+        playbackSnapshot = PlayerPlaybackSnapshot(videoWidth = 1920, videoHeight = 1080)
+        onVideoBarsReported(bars)
+        switchToAutoIfBarsFound()
+    }
 
     private fun PlayerScreenRuntime.enterEpisode(season: Int, episode: Int) {
         activeSeasonNumber = season

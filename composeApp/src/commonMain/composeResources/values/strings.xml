@@ -1161,6 +1161,8 @@
     <string name="settings_playback_show_loading_overlay_description">Show loading screen until first video frame appears.</string>
     <string name="settings_playback_pause_overlay">Pause Overlay</string>
     <string name="settings_playback_pause_overlay_description">Show details overlay after 5 seconds while paused.</string>
+    <string name="settings_playback_auto_remove_black_bars">Remove Black Bars Automatically</string>
+    <string name="settings_playback_auto_remove_black_bars_description">Switch from Fit to Auto when a video has black bars baked in. Switching back to another mode keeps it off for that season.</string>
     <string name="settings_playback_parental_guide">Content Warnings</string>
     <string name="settings_playback_parental_guide_description">Show parental guidance overlay when playback starts.</string>
     <string name="settings_playback_subtitle_background_color">Background Color</string>

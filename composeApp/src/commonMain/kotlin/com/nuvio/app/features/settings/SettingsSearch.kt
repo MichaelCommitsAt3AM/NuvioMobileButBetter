@@ -636,6 +636,11 @@ internal fun settingsSearchEntries(
                 stringResource(Res.string.settings_playback_pause_overlay),
                 stringResource(Res.string.settings_playback_pause_overlay_description),
             ),
+            if (!isIos) PlaybackSearchRow(
+                "auto-remove-black-bars",
+                stringResource(Res.string.settings_playback_auto_remove_black_bars),
+                stringResource(Res.string.settings_playback_auto_remove_black_bars_description),
+            ) else null,
             PlaybackSearchRow(
                 "external-player",
                 stringResource(Res.string.settings_playback_external_player),
