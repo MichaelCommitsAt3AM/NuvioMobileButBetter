@@ -79,6 +79,13 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
         hasSentCompletionScrobbleForCurrentItem = false
         currentTrackingMedia = null
     }
+
+    // Keyed on the episode, not the source: switching streams keeps whatever mode is showing.
+    val episodeIdentity = "$activeVideoId:$activeSeasonNumber:$activeEpisodeNumber"
+    if (lastResizeModeEpisodeIdentity != episodeIdentity) {
+        lastResizeModeEpisodeIdentity = episodeIdentity
+        applyRememberedResizeMode()
+    }
 }
 
 internal fun PlayerScreenRuntime.currentPlaybackProgressPercent(

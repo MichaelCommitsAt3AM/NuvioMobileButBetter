@@ -128,7 +128,10 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
             )?.videos ?: emptyList()
         }
         if (runtime.lastSyncedSettingsResizeMode != playerSettingsUiState.resizeMode) {
-            runtime.resizeMode = playerSettingsUiState.resizeMode
+            // A remembered Auto isn't a saved mode, so a settings change doesn't displace it.
+            if (runtime.resizeMode != PlayerResizeMode.Auto) {
+                runtime.resizeMode = playerSettingsUiState.resizeMode
+            }
             runtime.lastSyncedSettingsResizeMode = playerSettingsUiState.resizeMode
         }
         runtime.resetIdentityStateIfNeeded()

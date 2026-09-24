@@ -217,4 +217,5 @@ internal class PlayerScreenRuntime(
     var lastSyncedSettingsResizeMode: PlayerResizeMode? = null
     var lastResetPlaybackIdentity: String? = null
     var lastResetVideoIdentity: String? = null
+    var lastResizeModeEpisodeIdentity: String? = null
 }

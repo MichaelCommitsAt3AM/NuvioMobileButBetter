@@ -24,6 +24,7 @@ actual object PlayerSettingsStorage {
     private const val pauseOverlayEnabledKey = "pause_overlay_enabled"
     private const val showParentalGuideKey = "show_parental_guide"
     private const val resizeModeKey = "resize_mode"
+    private const val autoAspectScopesKey = "auto_aspect_scopes"
     private const val holdToSpeedEnabledKey = "hold_to_speed_enabled"
     private const val holdToSpeedValueKey = "hold_to_speed_value"
     private const val touchGesturesEnabledKey = "touch_gestures_enabled"
@@ -251,6 +252,16 @@ actual object PlayerSettingsStorage {
             ?.edit()
             ?.putString(ProfileScopedKey.of(resizeModeKey), mode)
             ?.apply()
+    }
+
+    actual fun loadAutoAspectScopes(): Set<String>? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(autoAspectScopesKey)
+            if (sharedPreferences.contains(key)) sharedPreferences.getStringSet(key, emptySet())?.toSet() else null
+        }
+
+    actual fun saveAutoAspectScopes(scopes: Set<String>) {
+        preferences?.edit()?.putStringSet(ProfileScopedKey.of(autoAspectScopesKey), scopes)?.apply()
     }
 
     actual fun loadHoldToSpeedEnabled(): Boolean? =

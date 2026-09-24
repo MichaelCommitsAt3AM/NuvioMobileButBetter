@@ -221,15 +221,36 @@ internal val PlayerScreenRuntime.autoOfferPending: Boolean
 
 /**
  * Records what the engine reported about baked-in bars. Bars are per video: when the engine
- * reports none (new source, or an engine that doesn't measure) the offer is withdrawn, and a
- * previously chosen Auto falls back to the saved mode rather than staying selected with no effect.
+ * reports none (new source, or an engine that doesn't measure) the offer is withdrawn. A chosen
+ * Auto stays selected - with nothing measured it renders exactly like Fit, and it picks the zoom
+ * up as soon as the new video's bars are found.
  */
 internal fun PlayerScreenRuntime.onVideoBarsReported(bars: PlayerVideoBars?) {
-    if (bars == null && autoBars != null) {
-        autoTried = false
-        if (resizeMode == PlayerResizeMode.Auto) resizeMode = playerSettingsUiState.resizeMode
-    }
+    if (bars == null && autoBars != null) autoTried = false
     if (bars != autoBars) autoBars = bars
+}
+
+/** Where a chosen Auto is remembered: the current season for series, the title otherwise. */
+internal val PlayerScreenRuntime.autoAspectScope: String
+    get() = PlayerAutoAspectMemory.scopeKey(
+        parentMetaType = parentMetaType,
+        parentMetaId = parentMetaId,
+        seasonNumber = activeSeasonNumber.takeIf { isSeries },
+    )
+
+/**
+ * Picks the resize mode for a newly entered episode: Auto if the user left Auto on for this
+ * season (or title), otherwise the saved mode. Bars from the previous episode are dropped so its
+ * zoom never lands on the new video.
+ */
+internal fun PlayerScreenRuntime.applyRememberedResizeMode() {
+    autoBars = null
+    autoTried = false
+    resizeMode = if (PlayerAutoAspectMemory.isRemembered(autoAspectScope)) {
+        PlayerResizeMode.Auto
+    } else {
+        playerSettingsUiState.resizeMode
+    }
 }
 
 internal fun PlayerScreenRuntime.cycleResizeMode() {
@@ -242,10 +263,12 @@ internal fun PlayerScreenRuntime.cycleResizeMode() {
     }
     resizeMode = nextMode
     if (nextMode == PlayerResizeMode.Auto) {
-        // Auto is per-video and never saved: leaving the saved mode (and its sync marker) alone
-        // is what stops the settings sync from snapping the runtime back to it.
+        // Auto is never the saved default (it needs bars detected first); it is remembered for
+        // this season/title only, so the next episodes open on it too.
         autoTried = true
+        PlayerAutoAspectMemory.setRemembered(autoAspectScope, true)
     } else {
+        PlayerAutoAspectMemory.setRemembered(autoAspectScope, false)
         lastSyncedSettingsResizeMode = nextMode
         PlayerSettingsRepository.setResizeMode(nextMode)
     }
