@@ -266,6 +266,18 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         }
     }
 
+    // Every seek passes through BUFFERING, even into already-buffered media; most resolve well
+    // inside this delay, so only a real stall shows the spinner. Loading ending cancels the
+    // pending delay via the key change.
+    LaunchedEffect(playbackSnapshot.isLoading) {
+        if (playbackSnapshot.isLoading) {
+            delay(PlayerBufferingIndicatorDelayMs)
+            showBufferingIndicator = true
+        } else {
+            showBufferingIndicator = false
+        }
+    }
+
     LaunchedEffect(playbackSnapshot.isLoading, playerController, preferredAudioLanguageTargets) {
         if (!playbackSnapshot.isLoading && playerController != null) {
             refreshTracks()
@@ -524,8 +536,14 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
             return@LaunchedEffect
         }
         val positionSec = playbackSnapshot.positionMs / 1000.0
+        // Every manual seek that records these positions is a Fast seek, so it may land anywhere
+        // in the landing range rather than exactly on toMs.
         lastManualSkipSeekPositions?.let { (fromMs, toMs) ->
-            autoSkippedIntervals += skipIntervals.intervalsAtSeekPositions(fromMs, toMs)
+            autoSkippedIntervals += skipIntervals.intervalsAtSeekPositions(
+                fromMs = fromMs,
+                toMs = toMs,
+                toLandingRangeMs = fastSeekLandingRangeMs(fromMs, toMs),
+            )
         }
         val current = skipIntervals.firstOrNull { interval ->
             positionSec >= interval.startTime && positionSec < interval.endTime &&

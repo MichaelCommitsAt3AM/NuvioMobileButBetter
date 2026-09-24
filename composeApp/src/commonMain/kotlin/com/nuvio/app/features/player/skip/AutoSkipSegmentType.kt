@@ -24,11 +24,24 @@ internal fun SkipInterval.shouldAutoSkip(selectedTypes: Set<AutoSkipSegmentType>
     startTime.isFinite() && endTime.isFinite() && startTime >= 0 && endTime > startTime &&
         AutoSkipSegmentType.fromSkipIntervalType(type) in selectedTypes
 
-internal fun List<SkipInterval>.intervalsAtSeekPositions(fromMs: Long, toMs: Long): List<SkipInterval> =
+/**
+ * Intervals the user seeked out of or into. [toLandingRangeMs] widens the destination to every
+ * position a keyframe-snapped seek to [toMs] may actually land on.
+ */
+internal fun List<SkipInterval>.intervalsAtSeekPositions(
+    fromMs: Long,
+    toMs: Long,
+    toLandingRangeMs: LongRange = toMs..toMs,
+): List<SkipInterval> =
     filter { interval ->
         AutoSkipSegmentType.fromSkipIntervalType(interval.type) != null &&
-            listOf(fromMs, toMs).any { position ->
-                val seconds = position / 1000.0
-                seconds >= interval.startTime && seconds < interval.endTime
-            }
+            (fromMs.isInside(interval) || toLandingRangeMs.overlaps(interval))
     }
+
+private fun Long.isInside(interval: SkipInterval): Boolean {
+    val seconds = this / 1000.0
+    return seconds >= interval.startTime && seconds < interval.endTime
+}
+
+private fun LongRange.overlaps(interval: SkipInterval): Boolean =
+    first / 1000.0 < interval.endTime && last / 1000.0 >= interval.startTime

@@ -57,6 +57,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.ForwardingRenderer
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.text.TextOutput
@@ -485,12 +486,24 @@ private fun ExoPlayerSurface(
     // doesn't advance and audio stays held) until it has rendered the first frame at the seek
     // target. Seeks into MKV files used to freeze video anyway because the seek map pointed at
     // non-video cue points - fixed at the source by VideoCueExtractorsFactory.
-    fun seekPlayerTo(positionMs: Long) {
-        exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
+    //
+    // Seek parameters are set on every seek (not reset afterwards): setSeekParameters and seekTo
+    // are queued in order on the playback thread, so each seek resolves with its own precision.
+    fun seekPlayerTo(positionMs: Long, precision: PlayerSeekPrecision = PlayerSeekPrecision.Exact) {
+        val fromMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+        val targetMs = positionMs.coerceAtLeast(0L)
+        exoPlayer.setSeekParameters(
+            when (precision) {
+                PlayerSeekPrecision.Exact -> SeekParameters.EXACT
+                PlayerSeekPrecision.Fast -> fastSeekParameters(fromMs, targetMs)
+            },
+        )
+        Log.i(PLAYER_DIAGNOSTIC_TAG, "seek fromMs=$fromMs targetMs=$targetMs precision=$precision")
+        exoPlayer.seekTo(targetMs)
     }
 
-    fun seekPlayerBy(offsetMs: Long) {
-        seekPlayerTo(exoPlayer.currentPosition + offsetMs)
+    fun seekPlayerBy(offsetMs: Long, precision: PlayerSeekPrecision = PlayerSeekPrecision.Exact) {
+        seekPlayerTo(exoPlayer.currentPosition + offsetMs, precision)
     }
 
     fun startPlayback() {
@@ -508,8 +521,8 @@ private fun ExoPlayerSurface(
             controls = AndroidPlayerNowPlayingController.PlaybackControls(
                 play = ::startPlayback,
                 pause = exoPlayer::pause,
-                seekTo = ::seekPlayerTo,
-                seekBy = ::seekPlayerBy,
+                seekTo = { positionMs -> seekPlayerTo(positionMs, PlayerSeekPrecision.Fast) },
+                seekBy = { offsetMs -> seekPlayerBy(offsetMs, PlayerSeekPrecision.Fast) },
             ),
         )
     }
@@ -699,6 +712,20 @@ private fun ExoPlayerSurface(
                 dispatchExoPlayerSnapshot()
             }
 
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                // Where a Fast seek actually landed (the snapped keyframe), for seek-latency diagnosis.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
+                    Log.i(
+                        PLAYER_DIAGNOSTIC_TAG,
+                        "seekAdjusted requestedMs=${oldPosition.positionMs} landedMs=${newPosition.positionMs}",
+                    )
+                }
+            }
+
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 dispatchExoPlayerSnapshot()
             }
@@ -799,6 +826,14 @@ private fun ExoPlayerSurface(
 
                 override fun seekBy(offsetMs: Long) {
                     seekPlayerBy(offsetMs)
+                }
+
+                override fun seekTo(positionMs: Long, precision: PlayerSeekPrecision) {
+                    seekPlayerTo(positionMs, precision)
+                }
+
+                override fun seekBy(offsetMs: Long, precision: PlayerSeekPrecision) {
+                    seekPlayerBy(offsetMs, precision)
                 }
 
                 override fun retry() {
@@ -1126,8 +1161,8 @@ private fun LibmpvPlayerSurface(
                 controls = AndroidPlayerNowPlayingController.PlaybackControls(
                     play = { view.setPaused(false) },
                     pause = { view.setPaused(true) },
-                    seekTo = { positionMs -> view.seekToMs(positionMs) },
-                    seekBy = { offsetMs -> view.seekByMs(offsetMs) },
+                    seekTo = { positionMs -> view.seekToMs(positionMs, PlayerSeekPrecision.Fast) },
+                    seekBy = { offsetMs -> view.seekByMs(offsetMs, PlayerSeekPrecision.Fast) },
                 ),
             )
         }
@@ -1499,9 +1534,9 @@ private class NuvioLibmpvView(
         executeMpv { setPausedNow(paused) }
     }
 
-    fun seekToMs(positionMs: Long) {
+    fun seekToMs(positionMs: Long, precision: PlayerSeekPrecision = PlayerSeekPrecision.Exact) {
         executeMpv {
-            mpv.command("seek", (positionMs.coerceAtLeast(0L) / 1000.0).toString(), "absolute")
+            mpv.command("seek", (positionMs.coerceAtLeast(0L) / 1000.0).toString(), "absolute".withMpvSeekPrecision(precision))
         }
     }
 
@@ -1575,10 +1610,16 @@ private class NuvioLibmpvView(
         }
     }
 
-    fun seekByMs(offsetMs: Long) {
+    fun seekByMs(offsetMs: Long, precision: PlayerSeekPrecision = PlayerSeekPrecision.Exact) {
         executeMpv {
-            mpv.command("seek", (offsetMs / 1000.0).toString(), "relative")
+            mpv.command("seek", (offsetMs / 1000.0).toString(), "relative".withMpvSeekPrecision(precision))
         }
+    }
+
+    // Exact keeps mpv's own default (hr-seek decides), so existing seeks behave as before.
+    private fun String.withMpvSeekPrecision(precision: PlayerSeekPrecision): String = when (precision) {
+        PlayerSeekPrecision.Exact -> this
+        PlayerSeekPrecision.Fast -> "$this+keyframes"
     }
 
     fun controller(
@@ -1593,6 +1634,12 @@ private class NuvioLibmpvView(
             override fun seekTo(positionMs: Long) = this@NuvioLibmpvView.seekToMs(positionMs)
 
             override fun seekBy(offsetMs: Long) = this@NuvioLibmpvView.seekByMs(offsetMs)
+
+            override fun seekTo(positionMs: Long, precision: PlayerSeekPrecision) =
+                this@NuvioLibmpvView.seekToMs(positionMs, precision)
+
+            override fun seekBy(offsetMs: Long, precision: PlayerSeekPrecision) =
+                this@NuvioLibmpvView.seekByMs(offsetMs, precision)
 
             override fun retry() {
                 executeMpv { loadCurrentSourceNow(playWhenReady = true) }

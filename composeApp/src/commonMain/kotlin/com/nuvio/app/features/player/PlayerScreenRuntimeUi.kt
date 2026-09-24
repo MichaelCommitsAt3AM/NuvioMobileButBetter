@@ -272,6 +272,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             episodeNumber = activeEpisodeNumber,
             episodeTitle = activeEpisodeTitle,
             playbackSnapshot = playbackSnapshot,
+            showBufferingIndicator = showBufferingIndicator,
             displayedPositionMs = displayedPositionMs,
             metrics = metrics,
             resizeMode = resizeMode,
@@ -359,7 +360,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                 lastManualSkipSeekPositions = playbackSnapshot.positionMs to positionMs
                 isScrubbingTimeline = false
                 scrubbingPositionMs = null
-                playerController?.seekTo(positionMs)
+                playerController?.seekTo(positionMs, PlayerSeekPrecision.Fast)
                 scheduleProgressSyncAfterSeek()
             },
             horizontalSafePadding = horizontalSafePadding,
@@ -447,7 +448,7 @@ private fun BoxScope.RenderPlaybackOverlays(
             nextEpisodeAutoPlaySourceName = null
             nextEpisodeAutoPlayCountdown = null
         },
-        isBuffering = playbackSnapshot.isLoading,
+        isBuffering = showBufferingIndicator,
         isInPip = isInPip,
         onTogglePlayback = { togglePlayback() },
         errorMessage = errorMessage,

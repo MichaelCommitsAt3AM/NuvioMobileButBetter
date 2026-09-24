@@ -2,12 +2,39 @@ package com.nuvio.app.features.player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import kotlin.math.abs
+
+/**
+ * [Fast] lets the engine land on a nearby keyframe instead of decoding forward to the exact
+ * target, which removes most of the post-seek stall. Use it for coarse user seeks (double-tap,
+ * swipe, scrub); keep [Exact] where the position matters (resume, skip intro).
+ */
+enum class PlayerSeekPrecision { Exact, Fast }
+
+/** How far a [PlayerSeekPrecision.Fast] seek may land from its target, either side. */
+internal const val PlayerFastSeekToleranceMs = 3_000L
+
+/**
+ * Where a [PlayerSeekPrecision.Fast] seek from [fromMs] to [targetMs] may land. The side facing
+ * [fromMs] is capped at half the seek distance, so a short forward seek can never land behind
+ * where it started (and vice versa).
+ */
+internal fun fastSeekLandingRangeMs(fromMs: Long, targetMs: Long): LongRange {
+    val towardOriginMs = minOf(PlayerFastSeekToleranceMs, abs(targetMs - fromMs) / 2)
+    return if (targetMs >= fromMs) {
+        (targetMs - towardOriginMs)..(targetMs + PlayerFastSeekToleranceMs)
+    } else {
+        (targetMs - PlayerFastSeekToleranceMs)..(targetMs + towardOriginMs)
+    }
+}
 
 interface PlayerEngineController {
     fun play()
     fun pause()
     fun seekTo(positionMs: Long)
     fun seekBy(offsetMs: Long)
+    fun seekTo(positionMs: Long, precision: PlayerSeekPrecision) = seekTo(positionMs)
+    fun seekBy(offsetMs: Long, precision: PlayerSeekPrecision) = seekBy(offsetMs)
     fun retry()
     fun setPlaybackSpeed(speed: Float)
     fun setMuted(muted: Boolean) {}

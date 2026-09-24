@@ -75,6 +75,7 @@ internal fun PlayerControlsShell(
     episodeNumber: Int?,
     episodeTitle: String?,
     playbackSnapshot: PlayerPlaybackSnapshot,
+    showBufferingIndicator: Boolean,
     displayedPositionMs: Long,
     metrics: PlayerLayoutMetrics,
     resizeMode: PlayerResizeMode,
@@ -171,6 +172,7 @@ internal fun PlayerControlsShell(
             if (showPlaybackControls) {
                 CenterControls(
                     snapshot = playbackSnapshot,
+                    showBufferingIndicator = showBufferingIndicator,
                     metrics = metrics,
                     onSeekBack = onSeekBack,
                     onSeekForward = onSeekForward,
@@ -395,6 +397,7 @@ internal fun PlayerHeaderIconButton(
 @Composable
 private fun CenterControls(
     snapshot: PlayerPlaybackSnapshot,
+    showBufferingIndicator: Boolean,
     metrics: PlayerLayoutMetrics,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
@@ -417,8 +420,9 @@ private fun CenterControls(
         // )
         // While buffering, the independent spinner in PlayerPlaybackOverlays occupies this
         // exact spot (so it stays visible even after controls auto-hide); skip the icon here
-        // to avoid the two overlapping.
-        if (!snapshot.isLoading) {
+        // to avoid the two overlapping. Keyed off the same delayed flag as the spinner so the
+        // button doesn't vanish during a quick seek that never shows the spinner.
+        if (!showBufferingIndicator) {
             PlayPauseControlButton(
                 isPlaying = snapshot.isPlaying,
                 metrics = metrics,
