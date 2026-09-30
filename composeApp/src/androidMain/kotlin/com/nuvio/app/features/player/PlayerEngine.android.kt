@@ -339,6 +339,8 @@ private fun ExoPlayerSurface(
                 .setTsExtractorTimestampSearchBytes(1500 * TsExtractor.TS_PACKET_SIZE),
         )
     }
+    // Filled by the first open-ended request for the video; sizes the RAM back buffer.
+    val sourceContentLength = remember(sourceUrl) { SourceContentLength() }
     val dataSourceFactory = remember(
         context,
         sourceUrl,
@@ -347,13 +349,17 @@ private fun ExoPlayerSurface(
         useYoutubeChunkedPlayback,
         externalSubtitles,
     ) {
-        PlatformPlaybackDataSourceFactory.create(
-            context = context,
-            defaultRequestHeaders = sanitizedSourceHeaders,
-            defaultResponseHeaders = sanitizedSourceResponseHeaders,
-            useYoutubeChunkedPlayback = useYoutubeChunkedPlayback,
-            useLongReadTimeout = isLoopbackPlaybackSource(sourceUrl),
-            externalSubtitles = externalSubtitles,
+        ContentLengthProbeDataSourceFactory(
+            upstream = PlatformPlaybackDataSourceFactory.create(
+                context = context,
+                defaultRequestHeaders = sanitizedSourceHeaders,
+                defaultResponseHeaders = sanitizedSourceResponseHeaders,
+                useYoutubeChunkedPlayback = useYoutubeChunkedPlayback,
+                useLongReadTimeout = isLoopbackPlaybackSource(sourceUrl),
+                externalSubtitles = externalSubtitles,
+            ),
+            sourceUrl = sourceUrl,
+            sink = sourceContentLength,
         )
     }
 
@@ -386,11 +392,15 @@ private fun ExoPlayerSurface(
         isLowRamDevice,
     ) {
         DynamicBackBufferLoadControl(
-            minBufferMs = 15_000,
-            maxBufferMs = 70_000,
+            // min == max keeps the buffer ahead topped up continuously instead of letting it drain
+            // to the min before refilling, so how far a forward skip reaches in RAM doesn't depend
+            // on where in that cycle it lands.
+            minBufferMs = 50_000,
+            maxBufferMs = 50_000,
+            // What a seek waits for before resuming (ExoPlayer clears its rebuffering flag on seek).
             bufferForPlaybackMs = DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+            // Only mid-playback stalls: a longer refill avoids stall/resume/stall stutter.
             bufferForPlaybackAfterRebufferMs = 5_000,
-            targetBufferBytes = 100 * 1024 * 1024,
             isLowRamDevice = isLowRamDevice,
         )
     }
@@ -689,6 +699,7 @@ private fun ExoPlayerSurface(
                     fallbackStartPositionMs = null
                     latestOnError.value(null)
                     exoPlayer.logCurrentTracks("STATE_READY")
+                    loadControl.updateEstimatedBitrate(sourceContentLength.bytes, exoPlayer.duration)
                 }
                 syncPlayerViewKeepScreenOn()
                 dispatchExoPlayerSnapshot()
