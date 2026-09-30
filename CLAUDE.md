@@ -74,7 +74,7 @@ This fork only ships Android releases — don't build, sign, or publish iOS for 
 
 These recur on every `merge upstream/cmp-rewrite` — resolve them the same way each time without asking:
 
-- **`.github/workflows/android-release.yml`**: always keep this fork's version entirely (`git checkout --ours`), discarding upstream's version wholesale. Upstream has restructured this into a multi-job `prepare`/`android`/`ios`/`release` pipeline that also builds and ships iOS IPAs; this fork doesn't build iOS (see above) and doesn't even dispatch this workflow — its required secrets aren't configured, releases are always built and published locally (see "Building and publishing a release" below). Don't try to cherry-pick pieces of upstream's restructure into it.
+- **`.github/workflows/android-release.yml`**: always keep this fork's version entirely (`git checkout --ours`), discarding upstream's version wholesale. Upstream has restructured this into a multi-job `prepare`/`android`/`ios`/`release` pipeline that also builds and ships iOS IPAs; this fork doesn't build iOS (see above), and this fork's version is the one that builds, signs, and publishes its Android releases in CI (see "Building and publishing a release" below). Don't try to cherry-pick pieces of upstream's restructure into it.
 - **`AddonRepository.kt` — primary-profile addon sharing**: this fork replaced upstream's live guard-based model (`isUsingPrimaryAddonsFromSecondaryProfile()`, which blocked local edits while mirroring a primary profile's addons) with a copy-based model (`copyPrimaryAddonsToProfile()`/`fetchPrimaryAddonsForPicker()`, a one-time copy the user can then edit freely) and deleted the guard function. Upstream keeps extending the old guard into more call sites (e.g. `moveAddon`, `pushToServer`) on every sync. When that conflicts: drop any reintroduced `isUsingPrimaryAddonsFromSecondaryProfile()` call (the function doesn't exist on this fork), but keep whatever *unrelated* structural improvements upstream bundled into the same functions (e.g. debounced pushes via `pushJobsByProfile`, no-op `changed`/`shouldRefresh` tracking to skip redundant persist/push calls) — those aren't part of the addon-sharing model and are worth keeping. Watch for compile breakage: other non-conflicting parts of the file may already assume upstream's newer structure (e.g. a `pushJobsByProfile` map or `finally` block referencing a job variable), so a literal "keep ours" on the conflicting hunk alone can leave dangling references — reconcile rather than dropping the whole hunk blind.
 
 ### Versioning and releases
@@ -87,23 +87,24 @@ Fork releases use `Major.Minor.Patch.Fork` (e.g. `0.3.1.1`, `0.3.1.2`) — the f
 ./scripts/bump-version.sh sync-upstream --ref upstream/cmp-rewrite  # same, auto-read from a ref
 ```
 
-`CURRENT_PROJECT_VERSION` always increments by exactly 1 on every release and is never reset, even when `sync-upstream` resets the fork number — it's the Android `versionCode` and drives the in-app updater (`AppFeaturePolicy.inAppUpdaterEnabled`), so it must keep increasing monotonically regardless of what the marketing version string does. The script commits and locally tags the bump (tag name == the new version); it doesn't push or build anything.
+`CURRENT_PROJECT_VERSION` always increments by exactly 1 on every release and is never reset, even when `sync-upstream` resets the fork number — it's the Android `versionCode` and drives the in-app updater (`AppFeaturePolicy.inAppUpdaterEnabled`), so it must keep increasing monotonically regardless of what the marketing version string does. The script commits the bump but does not tag it — the release workflow creates the tag (tag name == the new version); it doesn't push or build anything.
 
 ### Building and publishing a release
 
-Always build and sign the release APK locally — do **not** dispatch `.github/workflows/android-release.yml`. That workflow exists and looks like the intended path, but this repo's `NUVIO_LOCAL_PROPERTIES_BASE64`/`NUVIO_RELEASE_KEYSTORE_BASE64` Actions secrets aren't configured, so every run fails at the "Validate release state" step before anything gets built (confirmed by a real failed run — "Missing required release secrets"). Until those secrets are added in the repo's Settings → Secrets and variables → Actions, do the whole release locally instead:
+**Android releases are built and signed only in CI** by `.github/workflows/android-release.yml` (`Build Android Release`, `workflow_dispatch`) — this fork no longer builds, signs, or uploads release APKs locally. Don't run a local release build, hand-create tags, or `gh release upload` a locally built APK; local builds are for testing on a device only. iOS is never built for a release.
 
-```bash
-git push origin HEAD   # push the version-bump commit (not the local tag bump-version.sh made)
-NUVIO_ANDROID_DISTRIBUTION=full ./gradlew :androidApp:assembleFullRelease
-gh release create <version> --repo MichaelCommitsAt3AM/NuvioMobileButBetter \
-  --target <branch> --title "<title>" --latest --notes "..."
-gh release upload <version> --repo MichaelCommitsAt3AM/NuvioMobileButBetter \
-  androidApp/build/outputs/apk/full/release/androidApp-full-release.apk
-```
+The workflow builds `:androidApp:assembleFullRelease` (ABI splits are off, so it produces the single `androidApp-full-release.apk` the in-app updater downloads), signs it with the release keystore, and creates the tag + GitHub release at the dispatched branch. Modes: `dry-run` (validate + release notes, no build), `build-only` (signed APK as a workflow artifact, no tag/release, skips the bump-order checks — use it to test a build), `draft`, `publish` (published directly as Latest).
 
-Local signing already works via `local.properties`/`keystore/release.keystore` (the same fields the CI workflow expects), so no extra setup is needed for this path. If the missing secrets are ever configured, this note should be revisited — dispatching the workflow is less error-prone once it actually works.
+Required repository secrets (Settings → Secrets and variables → Actions): `NUVIO_LOCAL_PROPERTIES_BASE64` (base64 of `local.properties`; must contain `NUVIO_RELEASE_STORE_PASSWORD`, `NUVIO_RELEASE_KEY_ALIAS`, `NUVIO_RELEASE_KEY_PASSWORD`, `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` — its `sdk.dir`/`NUVIO_RELEASE_STORE_FILE` lines are dropped and replaced in CI) and `NUVIO_RELEASE_KEYSTORE_BASE64` (base64 of `keystore/release.keystore`). Re-create them whenever those local files change.
 
-Release title depends on which kind of release this is: a regular fork release (fork number incremented via `bump-version.sh fork`) is titled `"<Major.Minor.Patch> - Fork update <Fork>"`; a release that is itself an upstream sync (fork number reset to `.1` via `bump-version.sh sync-upstream`) is titled `"<Major.Minor.Patch> - Sync with upstream"` instead.
+1. Commit the feature/fix work first.
+2. `./scripts/bump-version.sh fork` (or `sync-upstream`) — commits the bump alone. The workflow refuses to release if anything other than the release workflow/scripts or Markdown docs (`*.md`) changed after the bump.
+3. `git push origin HEAD` (no tag to push — the workflow creates it).
+4. Dispatch `Build Android Release` on that branch with `mode=draft`.
+5. Rewrite the draft's generated notes (see below), then publish it as Latest: `gh release edit <version> --repo MichaelCommitsAt3AM/NuvioMobileButBetter --draft=false --latest`. (`mode=publish` publishes straight away as Latest, but with the generated notes.)
+
+If a release run fails, fix the workflow or code and dispatch it again — don't fall back to building locally. The tag and release are only created in the final step, after the APK has built.
+
+Release title depends on which kind of release this is: a regular fork release (fork number incremented via `bump-version.sh fork`) is titled `"<Major.Minor.Patch> - Fork update <Fork>"`; a release that is itself an upstream sync (fork number reset to `.1` via `bump-version.sh sync-upstream`) is titled `"<Major.Minor.Patch> - sync with upstream"` instead. The workflow sets the title automatically (`scripts/release-metadata.sh`).
 
 GitHub release notes should be short, feature-level bullet points in plain non-technical language (what changed for a user, not what changed in the code) — not a raw commit list. `scripts/generate-release-notes.sh` produces a commit-list draft; rewrite that into a handful of plain-English bullets before publishing, grouping related commits into one line each.

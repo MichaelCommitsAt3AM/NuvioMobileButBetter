@@ -29,14 +29,14 @@ In both cases:
     number) is always incremented by exactly 1 and is never reset.
     It must keep increasing monotonically regardless of what
     MARKETING_VERSION does, or installs/in-app updates stop working.
-  - The working tree must be clean. The version bump is committed and
-    tagged locally (tag name == the new MARKETING_VERSION). Nothing
-    is pushed and nothing is built - this only manages the version.
+  - The working tree must be clean. The version bump is committed
+    locally but not tagged: the release workflow creates the tag
+    (tag name == the new MARKETING_VERSION). Nothing is pushed and
+    nothing is built - this only manages the version.
 
-This fork only ships Android releases. After running this script,
-build and upload the Android release yourself, e.g.:
-  NUVIO_ANDROID_DISTRIBUTION=full ./gradlew :androidApp:bundleFullRelease
-  NUVIO_ANDROID_DISTRIBUTION=full ./gradlew :androidApp:assembleFullRelease
+This fork only ships Android releases, built and signed in CI. After
+running this script, push the commit and dispatch the "Build Android
+Release" workflow (.github/workflows/android-release.yml).
 EOF
 }
 
@@ -203,17 +203,15 @@ write_xcconfig_values "$VERSION_FILE" \
 
 git -C "$ROOT_DIR" add "$VERSION_FILE"
 git -C "$ROOT_DIR" commit -m "chore: bump version to ${new_marketing_version} (build ${new_build_number})"
-git -C "$ROOT_DIR" tag "$new_marketing_version"
 
 cat <<EOF
 
 Bumped: ${current_marketing_version} (build ${current_build_number}) -> ${new_marketing_version} (build ${new_build_number})
-Committed and tagged '${new_marketing_version}' locally.
+Committed locally (not tagged - the release workflow creates tag '${new_marketing_version}').
 
 Next steps:
-  git push origin HEAD "${new_marketing_version}"
-  NUVIO_ANDROID_DISTRIBUTION=full ./gradlew :androidApp:bundleFullRelease
-  NUVIO_ANDROID_DISTRIBUTION=full ./gradlew :androidApp:assembleFullRelease
-  Upload the AAB/APK to a GitHub Release for tag ${new_marketing_version}.
+  git push origin HEAD
+  Dispatch "Build Android Release" (.github/workflows/android-release.yml)
+  on this branch with mode=draft, rewrite the notes, then publish as Latest.
   (This fork does not build or publish iOS releases.)
 EOF
