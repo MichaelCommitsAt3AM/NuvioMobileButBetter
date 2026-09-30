@@ -98,6 +98,7 @@ internal fun PlayerControlsShell(
     hideDetails: Boolean = false,
     onNextEpisodeClick: (() -> Unit)? = null,
     onInteraction: () -> Unit = {},
+    onTimelineHeightMeasured: (androidx.compose.ui.unit.Dp) -> Unit = {},
     showPlaybackControls: Boolean = true,
     onLockToggle: () -> Unit,
     onBack: () -> Unit,
@@ -124,10 +125,11 @@ internal fun PlayerControlsShell(
     val density = LocalDensity.current
     var timelineHeight by remember { mutableStateOf(0.dp) }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val centerControlHeight = metrics.playIconSize + maxOf(metrics.playButtonPadding, metrics.sideButtonPadding) * 2
-        val centerBottomPadding = if (useLegacyLayout) metrics.centerLift else maxOf(
-            metrics.centerLift,
-            timelineHeight * 2 + centerControlHeight + 16.dp - maxHeight,
+        val centerBottomPadding = playerCenterControlsBottomPadding(
+            metrics = metrics,
+            useLegacyLayout = useLegacyLayout,
+            timelineHeight = timelineHeight,
+            containerHeight = maxHeight,
         )
         Box(
             modifier = Modifier
@@ -266,7 +268,10 @@ internal fun PlayerControlsShell(
             if (showPlaybackControls && !useLegacyLayout) {
                 Column(
                     modifier = Modifier
-                        .onSizeChanged { size -> timelineHeight = with(density) { size.height.toDp() } }
+                        .onSizeChanged { size ->
+                            timelineHeight = with(density) { size.height.toDp() }
+                            onTimelineHeightMeasured(timelineHeight)
+                        }
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .windowInsetsPadding(playerTimelineBottomInsets(metrics))
@@ -312,6 +317,7 @@ internal fun PlayerControlsShell(
                         onOpenInExternalPlayer = onOpenInExternalPlayer,
                         onSubmitIntroClick = onSubmitIntroClick,
                         onInteraction = onInteraction,
+                        showAutoIndicator = showAutoIndicator,
                     )
                 }
             }

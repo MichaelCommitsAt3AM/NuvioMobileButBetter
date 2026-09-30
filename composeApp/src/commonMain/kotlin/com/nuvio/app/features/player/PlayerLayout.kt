@@ -128,6 +128,22 @@ internal fun playerHorizontalSafePadding(): Dp {
     return if (left > right) left else right
 }
 
+/**
+ * Bottom padding that lifts the centre play/pause button clear of the timeline block. Shared with
+ * the buffering spinner in PlayerPlaybackOverlays, which renders in the same spot while the
+ * controls are hidden and so has to reproduce this offset without the controls being composed.
+ */
+internal fun playerCenterControlsBottomPadding(
+    metrics: PlayerLayoutMetrics,
+    useLegacyLayout: Boolean,
+    timelineHeight: Dp,
+    containerHeight: Dp,
+): Dp {
+    if (useLegacyLayout) return metrics.centerLift
+    val centerControlHeight = metrics.playIconSize + maxOf(metrics.playButtonPadding, metrics.sideButtonPadding) * 2
+    return maxOf(metrics.centerLift, timelineHeight * 2 + centerControlHeight + 16.dp - containerHeight)
+}
+
 @Composable
 internal fun playerTimelineBottomInsets(metrics: PlayerLayoutMetrics): WindowInsets {
     val safeInsets = WindowInsets.safeContent.only(WindowInsetsSides.Bottom)

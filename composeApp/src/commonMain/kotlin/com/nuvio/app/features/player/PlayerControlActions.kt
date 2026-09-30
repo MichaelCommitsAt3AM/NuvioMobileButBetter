@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -36,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -98,6 +101,7 @@ internal fun PlayerControlActions(
     onOpenInExternalPlayer: (() -> Unit)?,
     onSubmitIntroClick: (() -> Unit)?,
     onInteraction: () -> Unit,
+    showAutoIndicator: Boolean = false,
 ) {
     val actions = listOfNotNull(
         onNextEpisodeClick?.let {
@@ -133,6 +137,7 @@ internal fun PlayerControlActions(
         PlayerControlAction(
             stringResource(resizeMode.labelRes), onResizeModeClick,
             painter = appIconPainter(AppIconResource.PlayerAspectRatio),
+            showBadge = showAutoIndicator,
         ),
         onOpenInExternalPlayer?.let {
             PlayerControlAction(
@@ -180,6 +185,7 @@ internal fun PlayerControlActions(
                         icon = action.icon,
                         painter = action.painter,
                         iconSize = action.iconSize,
+                        showBadge = action.showBadge,
                     )
                 }
                 if (hasOverflow) {
@@ -192,6 +198,8 @@ internal fun PlayerControlActions(
                             onInteraction()
                         },
                         icon = if (expanded) Icons.AutoMirrored.Rounded.KeyboardArrowLeft else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        // Surface a badge from an action tucked behind the overflow arrow.
+                        showBadge = !expanded && actions.drop(5).any { it.showBadge },
                     )
                 }
             }
@@ -226,12 +234,26 @@ private fun PlayerAction(
     icon: ImageVector? = null,
     painter: Painter? = null,
     iconSize: Dp = 24.dp,
+    showBadge: Boolean = false,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-        if (painter != null) {
-            Icon(painter, description, tint = Color.White, modifier = Modifier.size(iconSize))
-        } else if (icon != null) {
-            Icon(icon, description, tint = Color.White, modifier = Modifier.size(iconSize))
+    Box {
+        IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+            if (painter != null) {
+                Icon(painter, description, tint = Color.White, modifier = Modifier.size(iconSize))
+            } else if (icon != null) {
+                Icon(icon, description, tint = Color.White, modifier = Modifier.size(iconSize))
+            }
+        }
+        if (showBadge) {
+            // Indicator only - the button itself remains the one tap target.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 10.dp, end = 10.dp)
+                    .size(4.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF34C759)),
+            )
         }
     }
 }
@@ -242,4 +264,5 @@ private data class PlayerControlAction(
     val icon: ImageVector? = null,
     val painter: Painter? = null,
     val iconSize: Dp = 24.dp,
+    val showBadge: Boolean = false,
 )

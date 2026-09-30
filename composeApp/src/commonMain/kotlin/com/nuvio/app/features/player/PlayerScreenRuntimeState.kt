@@ -163,6 +163,8 @@ internal class PlayerScreenRuntime(
     var initialLoadCompleted by mutableStateOf(false)
     /** [PlayerPlaybackSnapshot.isLoading], delayed so in-buffer seeks don't flash the spinner. */
     var showBufferingIndicator by mutableStateOf(false)
+    /** Last measured height of the new layout's timeline block; kept while the controls are hidden. */
+    var measuredTimelineHeight by mutableStateOf(0.dp)
     var speedBoostRestoreSpeed by mutableStateOf<Float?>(null)
     var isHoldToSpeedGestureActive by mutableStateOf(false)
     var initialSeekApplied by mutableStateOf(

@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +34,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     displayedPositionMs: Long,
     metrics: PlayerLayoutMetrics,
     horizontalSafePadding: Dp,
+    timelineHeight: Dp = 0.dp,
     onUnlock: () -> Unit,
     showOpeningOverlay: Boolean,
     backdropArtwork: String?,
@@ -120,18 +122,27 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     // Suppressed during the initial opening overlay (logo/artwork) since that screen already
     // has its own loading treatment and this would otherwise overlap the title logo.
     if (isBuffering && initialLoadCompleted && !playerControlsLocked && !isInPip) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(bottom = metrics.centerLift)
-                .clip(CircleShape)
-                .clickable(onClick = onTogglePlayback)
-                .padding(metrics.playButtonPadding),
-            contentAlignment = Alignment.Center,
-        ) {
-            NuvioLoadingIndicator(
-                modifier = Modifier.size(metrics.playIconSize),
-            )
+        BoxWithConstraints(modifier = Modifier.matchParentSize()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(
+                        bottom = playerCenterControlsBottomPadding(
+                            metrics = metrics,
+                            useLegacyLayout = useLegacyLayout,
+                            timelineHeight = timelineHeight,
+                            containerHeight = maxHeight,
+                        ),
+                    )
+                    .clip(CircleShape)
+                    .clickable(onClick = onTogglePlayback)
+                    .padding(metrics.playButtonPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                NuvioLoadingIndicator(
+                    modifier = Modifier.size(metrics.playIconSize),
+                )
+            }
         }
     }
 
