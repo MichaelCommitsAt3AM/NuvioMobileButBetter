@@ -26,7 +26,7 @@ release_title() {
         local base="${BASH_REMATCH[1]}"
         local fork="${BASH_REMATCH[2]}"
         if [[ "$fork" == "1" ]]; then
-            printf '%s - sync with upstream' "$base"
+            printf '%s - Sync with upstream' "$base"
         else
             printf '%s - Fork update %s' "$base" "$fork"
         fi

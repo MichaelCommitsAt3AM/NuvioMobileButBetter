@@ -110,6 +110,6 @@ Required repository secrets (Settings → Secrets and variables → Actions): `N
 
 If a release run fails, fix the workflow or code and dispatch it again — don't fall back to building locally. The tag and release are only created in the final step, after the APK has built.
 
-Release title depends on which kind of release this is: a regular fork release (fork number incremented via `bump-version.sh fork`) is titled `"<Major.Minor.Patch> - Fork update <Fork>"`; a release that is itself an upstream sync (fork number reset to `.1` via `bump-version.sh sync-upstream`) is titled `"<Major.Minor.Patch> - sync with upstream"` instead. The workflow sets the title automatically (`scripts/release-metadata.sh`).
+Release title depends on which kind of release this is: a regular fork release (fork number incremented via `bump-version.sh fork`) is titled `"<Major.Minor.Patch> - Fork update <Fork>"`; a release that is itself an upstream sync (fork number reset to `.1` via `bump-version.sh sync-upstream`) is titled `"<Major.Minor.Patch> - Sync with upstream"` instead. The workflow sets the title automatically (`scripts/release-metadata.sh`).
 
 GitHub release notes should be short, feature-level bullet points in plain non-technical language (what changed for a user, not what changed in the code) — not a raw commit list. `scripts/generate-release-notes.sh` produces a commit-list draft; rewrite that into a handful of plain-English bullets before publishing, grouping related commits into one line each.
