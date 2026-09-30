@@ -6,20 +6,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
@@ -32,7 +26,9 @@ import com.nuvio.app.features.player.skip.SkipInterval
 @Composable
 internal fun BoxScope.PlayerPlaybackOverlays(
     playerControlsLocked: Boolean,
+    useLegacyLayout: Boolean,
     lockedOverlayVisible: Boolean,
+    showRemainingTime: Boolean = false,
     playbackSnapshot: PlayerPlaybackSnapshot,
     displayedPositionMs: Long,
     metrics: PlayerLayoutMetrics,
@@ -86,6 +82,8 @@ internal fun BoxScope.PlayerPlaybackOverlays(
             metrics = metrics,
             horizontalSafePadding = horizontalSafePadding,
             onUnlock = onUnlock,
+            useLegacyLayout = useLegacyLayout,
+            showRemainingTime = showRemainingTime,
             modifier = Modifier.fillMaxSize(),
         )
     }
@@ -132,32 +130,18 @@ internal fun BoxScope.PlayerPlaybackOverlays(
             contentAlignment = Alignment.Center,
         ) {
             NuvioLoadingIndicator(
-                color = Color.White,
                 modifier = Modifier.size(metrics.playIconSize),
             )
         }
     }
 
-    AnimatedVisibility(
-        visible = currentGestureFeedback != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            renderedGestureFeedback?.let { feedback ->
-                GestureFeedbackPill(
-                    feedback = feedback,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
-                        .padding(horizontal = horizontalSafePadding)
-                        .padding(top = 40.dp),
-                )
-            }
-        }
-    }
+    PlayerGestureOverlay(
+        currentFeedback = currentGestureFeedback,
+        renderedFeedback = renderedGestureFeedback,
+        useLegacyLayout = useLegacyLayout,
+        horizontalSafePadding = horizontalSafePadding,
+        horizontalPadding = metrics.horizontalPadding,
+    )
 
     if (!playerControlsLocked) {
         SkipIntroButton(
@@ -178,7 +162,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     if (isSeries && !playerControlsLocked) {
         NextEpisodeCard(
             nextEpisode = nextEpisodeInfo,
-            visible = showNextEpisodeCard,
+            visible = showNextEpisodeCard || nextEpisodeAutoPlaySearching || nextEpisodeAutoPlayCountdown != null,
             isAutoPlaySearching = nextEpisodeAutoPlaySearching,
             autoPlaySourceName = nextEpisodeAutoPlaySourceName,
             autoPlayCountdownSec = nextEpisodeAutoPlayCountdown,

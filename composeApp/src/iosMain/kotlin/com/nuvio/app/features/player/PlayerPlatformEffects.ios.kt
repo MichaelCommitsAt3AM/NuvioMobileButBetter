@@ -84,7 +84,7 @@ actual fun rememberDisplaySupportsHdr(): Boolean =
     remember { UIScreen.mainScreen.potentialEDRHeadroom > 1.0 }
 
 @Composable
-actual fun rememberPlayerGestureController(): PlayerGestureController? {
+internal actual fun rememberPlatformPlayerGestureController(): PlayerGestureController? {
     val controller = remember { IOSPlayerGestureController() }
 
     DisposableEffect(controller) {

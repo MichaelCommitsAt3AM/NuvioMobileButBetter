@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import com.nuvio.app.features.p2p.P2pStreamingState
@@ -144,6 +148,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             ),
     ) {
         val playerSurfaceSourceUrl = if (isP2pPlaybackActive) p2pResolvedSourceUrl else activeSourceUrl
+        val playbackKey = activePlaybackKey
         val initialPositionRequestKey = currentInitialPositionRequestKey()
         // How much Auto would zoom to push the video's baked-in black bars out of view, worked out
         // from the measured viewport and the bars the engine detected (or, until it has, the bars
@@ -157,52 +162,62 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         )
         autoZoom = autoZoomValue
         if (playerSurfaceSourceUrl != null) {
-            PlatformPlayerSurface(
-                sourceUrl = playerSurfaceSourceUrl,
-                sourceAudioUrl = activeSourceAudioUrl,
-                sourceHeaders = activeSourceHeaders,
-                sourceResponseHeaders = activeSourceResponseHeaders,
-                externalSubtitles = externalSubtitles,
-                streamType = activeStreamType,
-                modifier = Modifier.fillMaxSize(),
-                playWhenReady = shouldPlay,
-                initialPositionMs = activeInitialPositionMs.takeIf { it > 0L },
-                initialPositionRequestKey = initialPositionRequestKey,
-                resizeMode = resizeMode,
-                autoZoom = if (resizeMode == PlayerResizeMode.Auto) autoZoomValue else 1f,
-                detectVideoBars = true,
-                onInitialPositionHandled = { key, handled ->
-                    if (key == currentInitialPositionRequestKey()) {
-                        initialSeekApplied = handled
-                    }
-                },
-                onControllerReady = { controller ->
-                    playerController = controller
-                    playerControllerSourceUrl = activeSourceUrl
-                },
-                onSnapshot = { snapshot ->
-                    playbackSnapshot = snapshot
-                    onVideoBarsReported(snapshot.videoBars)
-                    if (snapshot.videoBarsAbsent) onVideoBarsAbsent()
-                    switchToAutoIfBarsFound()
-                    refreshAudioTracksIfChanged()
-                    if (!snapshot.isLoading) initialLoadCompleted = true
-                    if (snapshot.isEnded) {
-                        shouldPlay = false
-                        controlsVisible = !playerControlsLocked
-                    }
-                },
-                onError = { message ->
-                    if (message != null && tryRefreshCredentialedSourceAfterError(message)) {
-                        return@PlatformPlayerSurface
-                    }
-                    errorMessage = message
-                    if (message != null) {
-                        controlsVisible = !playerControlsLocked
-                        removeFailedStreamFromCache()
-                    }
-                },
-            )
+            key(playbackKey) {
+                val active = remember { mutableStateOf(true) }
+                DisposableEffect(Unit) {
+                    onDispose { active.value = false }
+                }
+                PlatformPlayerSurface(
+                    sourceUrl = playerSurfaceSourceUrl,
+                    sourceAudioUrl = activeSourceAudioUrl,
+                    sourceHeaders = activeSourceHeaders,
+                    sourceResponseHeaders = activeSourceResponseHeaders,
+                    externalSubtitles = externalSubtitles,
+                    streamType = activeStreamType,
+                    modifier = Modifier.fillMaxSize(),
+                    playWhenReady = shouldPlay,
+                    initialPositionMs = activeInitialPositionMs.takeIf { it > 0L },
+                    initialPositionRequestKey = initialPositionRequestKey,
+                    resizeMode = resizeMode,
+                    autoZoom = if (resizeMode == PlayerResizeMode.Auto) autoZoomValue else 1f,
+                    detectVideoBars = true,
+                    onInitialPositionHandled = { key, handled ->
+                        if (active.value && playbackKey == activePlaybackKey && key == currentInitialPositionRequestKey()) {
+                            initialSeekApplied = handled
+                        }
+                    },
+                    onControllerReady = { controller ->
+                        if (active.value && playbackKey == activePlaybackKey) {
+                            playerController = controller
+                            playerControllerSourceUrl = activeSourceUrl
+                        }
+                    },
+                    onSnapshot = { snapshot ->
+                        if (!active.value || !updatePlaybackSnapshot(snapshot, playbackKey)) return@PlatformPlayerSurface
+                        onVideoBarsReported(snapshot.videoBars)
+                        if (snapshot.videoBarsAbsent) onVideoBarsAbsent()
+                        switchToAutoIfBarsFound()
+                        refreshAudioTracksIfChanged()
+                        if (!snapshot.isLoading) initialLoadCompleted = true
+                        if (snapshot.isEnded) {
+                            shouldPlay = false
+                            controlsVisible = !playerControlsLocked
+                        }
+                    },
+                    onError = { message ->
+                        if (!active.value || playbackKey != activePlaybackKey) return@PlatformPlayerSurface
+                        if (message != null && tryRefreshCredentialedSourceAfterError(message)) {
+                            return@PlatformPlayerSurface
+                        }
+                        errorMessage = message
+                        if (message != null) {
+                            scrubbingPositionMs = null
+                            controlsVisible = !playerControlsLocked
+                            removeFailedStreamFromCache()
+                        }
+                    },
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -281,6 +296,17 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             resizeMode = resizeMode,
             showAutoIndicator = autoOfferPending && autoZoom > 1f,
             isLocked = playerControlsLocked,
+            useLegacyLayout = playerSettingsUiState.useLegacyPlayerLayout,
+            showRemainingTime = showRemainingTime,
+            onRuntimeClick = { showRemainingTime = !showRemainingTime },
+            releaseInfo = metaUiState.meta?.takeIf { it.id == parentMetaId }?.releaseInfo,
+            hideDetails = activeSkipInterval != null && !skipIntervalDismissed,
+            onNextEpisodeClick = if (nextEpisodeInfo?.hasAired == true && !nextEpisodeAutoPlaySearching && nextEpisodeAutoPlayCountdown == null) {
+                {
+                    playNextEpisode()
+                }
+            } else null,
+            onInteraction = { controlsActivityTick += 1 },
             showPlaybackControls = controlsVisible,
             onLockToggle = {
                 if (playerControlsLocked) unlockPlayerControls() else lockPlayerControls()
@@ -334,6 +360,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                             streamTitle = activeStreamTitle,
                             sourceHeaders = activeSourceHeaders,
                             resumePositionMs = playbackSnapshot.positionMs,
+                            durationMs = playbackSnapshot.durationMs.takeIf { it > 0L },
+                            playbackSession = playbackSession,
                             subtitles = loadedSubtitles,
                             season = activeSeasonNumber,
                             episode = activeEpisodeNumber,
@@ -359,10 +387,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                 scrubbingPositionMs = positionMs
             },
             onScrubFinished = { positionMs ->
-                // Respect the manual destination while the player's seek is still asynchronous.
-                lastManualSkipSeekPositions = playbackSnapshot.positionMs to positionMs
-                isScrubbingTimeline = false
-                scrubbingPositionMs = null
+                finishTimelineScrub(positionMs)
                 playerController?.seekTo(positionMs, PlayerSeekPrecision.Fast)
                 scheduleProgressSyncAfterSeek()
             },
@@ -387,7 +412,9 @@ private fun BoxScope.RenderPlaybackOverlays(
     runtime.run {
         PlayerPlaybackOverlays(
             playerControlsLocked = playerControlsLocked,
+            useLegacyLayout = playerSettingsUiState.useLegacyPlayerLayout,
             lockedOverlayVisible = lockedOverlayVisible,
+            showRemainingTime = showRemainingTime,
             playbackSnapshot = playbackSnapshot,
         displayedPositionMs = displayedPositionMs,
         metrics = metrics,
@@ -440,16 +467,12 @@ private fun BoxScope.RenderPlaybackOverlays(
         nextEpisodeAutoPlayCountdown = nextEpisodeAutoPlayCountdown,
         blurUnwatchedEpisodes = metaScreenSettingsUiState.blurUnwatchedEpisodes,
         onPlayNextEpisode = {
-            nextEpisodeAutoPlayJob?.cancel()
             playNextEpisode()
         },
         onDismissNextEpisode = {
-            nextEpisodeAutoPlayJob?.cancel()
+            cancelNextEpisodeAutoPlay()
             nextEpisodeCardDismissed = true
             showNextEpisodeCard = false
-            nextEpisodeAutoPlaySearching = false
-            nextEpisodeAutoPlaySourceName = null
-            nextEpisodeAutoPlayCountdown = null
         },
         isBuffering = showBufferingIndicator,
         isInPip = isInPip,
