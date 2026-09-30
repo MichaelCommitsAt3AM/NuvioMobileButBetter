@@ -180,12 +180,13 @@ internal fun TrackingProviderCards(
                     .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                TraktProviderCard(
-                    uiState = traktUiState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                )
+                // Trakt sync is disabled in this fork (no Trakt credentials are shipped).
+                // TraktProviderCard(
+                //     uiState = traktUiState,
+                //     modifier = Modifier
+                //         .weight(1f)
+                //         .fillMaxHeight(),
+                // )
                 SimklProviderCard(
                     uiState = simklUiState,
                     isSyncing = syncState.isLoading,
@@ -202,10 +203,11 @@ internal fun TrackingProviderCards(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(if (isTablet) 16.dp else 12.dp),
             ) {
-                TraktProviderCard(
-                    uiState = traktUiState,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                // Trakt sync is disabled in this fork (no Trakt credentials are shipped).
+                // TraktProviderCard(
+                //     uiState = traktUiState,
+                //     modifier = Modifier.fillMaxWidth(),
+                // )
                 SimklProviderCard(
                     uiState = simklUiState,
                     isSyncing = syncState.isLoading,

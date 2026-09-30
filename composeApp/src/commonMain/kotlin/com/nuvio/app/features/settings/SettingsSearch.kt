@@ -966,16 +966,17 @@ internal fun settingsSearchEntries(
         icon = Icons.Rounded.Notifications,
     )
 
-    addRow(
-        page = SettingsPage.TraktAuthentication,
-        key = "trakt-authentication",
-        title = stringResource(Res.string.trakt_library_source_trakt),
-        description = stringResource(Res.string.settings_trakt_intro_description),
-        pageLabel = trackingPage,
-        section = stringResource(Res.string.settings_tracking_services),
-        category = accountCategory,
-        icon = Icons.Rounded.Link,
-    )
+    // Trakt sync is disabled in this fork.
+    // addRow(
+    //     page = SettingsPage.TraktAuthentication,
+    //     key = "trakt-authentication",
+    //     title = stringResource(Res.string.trakt_library_source_trakt),
+    //     description = stringResource(Res.string.settings_trakt_intro_description),
+    //     pageLabel = trackingPage,
+    //     section = stringResource(Res.string.settings_tracking_services),
+    //     category = accountCategory,
+    //     icon = Icons.Rounded.Link,
+    // )
     addRow(
         page = SettingsPage.TraktAuthentication,
         key = "simkl-authentication",
@@ -989,9 +990,10 @@ internal fun settingsSearchEntries(
     listOf(
         PlaybackSearchRow("trakt-library-source", stringResource(Res.string.trakt_library_source_title), stringResource(Res.string.trakt_library_source_subtitle)),
         PlaybackSearchRow("trakt-watch-progress", stringResource(Res.string.trakt_watch_progress_title), stringResource(Res.string.trakt_watch_progress_subtitle)),
-        PlaybackSearchRow("trakt-continue-watching-window", stringResource(Res.string.trakt_continue_watching_window), stringResource(Res.string.trakt_continue_watching_subtitle)),
-        PlaybackSearchRow("trakt-comments", stringResource(Res.string.settings_trakt_comments), stringResource(Res.string.settings_trakt_comments_description)),
-        PlaybackSearchRow("trakt-more-like-this-source", stringResource(Res.string.trakt_more_like_this_source_title), stringResource(Res.string.trakt_more_like_this_source_subtitle)),
+        // Trakt sync is disabled in this fork; these rows live in the hidden Trakt-only section.
+        // PlaybackSearchRow("trakt-continue-watching-window", stringResource(Res.string.trakt_continue_watching_window), stringResource(Res.string.trakt_continue_watching_subtitle)),
+        // PlaybackSearchRow("trakt-comments", stringResource(Res.string.settings_trakt_comments), stringResource(Res.string.settings_trakt_comments_description)),
+        // PlaybackSearchRow("trakt-more-like-this-source", stringResource(Res.string.trakt_more_like_this_source_title), stringResource(Res.string.trakt_more_like_this_source_subtitle)),
     ).forEach { row ->
         addRow(
             page = SettingsPage.TraktAuthentication,
