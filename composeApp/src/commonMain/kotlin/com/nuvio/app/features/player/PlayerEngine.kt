@@ -29,6 +29,7 @@ internal fun fastSeekLandingRangeMs(fromMs: Long, targetMs: Long): LongRange {
 }
 
 interface PlayerEngineController {
+    val playbackEngine: AndroidPlaybackEngine? get() = null
     fun play()
     fun pause()
     fun seekTo(positionMs: Long)
@@ -59,6 +60,7 @@ interface PlayerEngineController {
     fun configureIosVideoOutput(settings: PlayerSettingsUiState) {}
     fun updateNowPlayingMetadata(info: PlayerNowPlayingInfo) {}
     fun clearNowPlayingInfo() {}
+    suspend fun getMediaInfo(): PlayerMediaInfo = PlayerMediaInfo()
 }
 
 internal fun sanitizePlaybackHeaders(headers: Map<String, String>?): Map<String, String> {
@@ -108,6 +110,7 @@ expect fun PlatformPlayerSurface(
     autoZoom: Float = 1f,
     /** Whether the engine should measure black bars baked into the frame (main player only). */
     detectVideoBars: Boolean = false,
+    playbackEngine: AndroidPlaybackEngine? = null,
     useNativeController: Boolean = false,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit = { _, _ -> },
     onControllerReady: (PlayerEngineController) -> Unit,

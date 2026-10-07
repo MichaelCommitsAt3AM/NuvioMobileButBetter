@@ -461,6 +461,8 @@ kotlin {
                 implementation(libs.androidx.media3.container)
                 implementation(libs.androidx.media3.extractor)
                 implementation(libs.androidx.media3.database)
+                implementation("com.google.guava:guava:33.3.1-android")
+                implementation("androidx.annotation:annotation-experimental:1.3.1")
                 implementation(libs.mpv.android.lib)
                 implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("lib-*.aar"))))
                 if (androidDistribution == "full") {
@@ -532,5 +534,10 @@ configurations.matching { it.name == "iosMainImplementation" }.configureEach {
 
 configurations.all {
     exclude(group = "androidx.media3", module = "media3-exoplayer")
+    exclude(group = "androidx.media3", module = "media3-exoplayer-hls")
     exclude(group = "androidx.media3", module = "media3-ui")
+    exclude(group = "androidx.media3", module = "media3-common")
+    exclude(group = "androidx.media3", module = "media3-datasource")
+    exclude(group = "androidx.media3", module = "media3-datasource-okhttp")
+    exclude(group = "androidx.media3", module = "media3-extractor")
 }
