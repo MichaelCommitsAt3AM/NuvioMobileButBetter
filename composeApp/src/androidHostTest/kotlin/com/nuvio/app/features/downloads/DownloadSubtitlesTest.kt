@@ -2,6 +2,8 @@ package com.nuvio.app.features.downloads
 
 import android.content.pm.ProviderInfo
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
+import android.net.Uri
 import androidx.core.content.FileProvider
 import com.nuvio.app.R
 import com.nuvio.app.features.player.ExternalPlayerPlaybackRequest
@@ -33,11 +35,16 @@ import org.robolectric.annotation.Config
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(
+    sdk = [34],
+    shadows = [HostAtomicFileShadow::class, HostFileProviderPathShadow::class],
+    instrumentedPackages = ["androidx.core.content"],
+)
 class DownloadSubtitlesTest {
     @get:Rule val temporary = TemporaryFolder()
 
@@ -167,6 +174,7 @@ class DownloadSubtitlesTest {
             metaData = Bundle().apply { putInt("android.support.FILE_PROVIDER_PATHS", R.xml.file_paths) }
         }
         shadowOf(context.packageManager).addOrUpdateProvider(provider)
+        val fileProvider = FileProvider().apply { attachInfo(context, provider) }
         SubtitleFileCache.initialize(context)
         val uri = File(temporary.newFolder(), "movie.mkv").toURI().toString()
         MockWebServer().use { server ->
@@ -191,6 +199,15 @@ class DownloadSubtitlesTest {
         }
         val forwarded = assertNotNull(request.subtitles).single()
         assertTrue(forwarded.url.startsWith("content://"))
+        ParcelFileDescriptor.AutoCloseInputStream(fileProvider.openFile(Uri.parse(forwarded.url), "r")).bufferedReader().use {
+            assertEquals(srt, it.readText())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            FileProvider.getUriForFile(context, provider.authority, File(context.cacheDir, "subtitles-other/private.srt"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            FileProvider.getUriForFile(context, provider.authority, File(context.cacheDir, "subtitles"))
+        }
         assertEquals(srt, File(context.cacheDir, "subtitles/en_English.srt").readText())
         SubtitleFileCache.clearCache()
         assertEquals(srt, File(URI(permanentTrack.url)).readText())

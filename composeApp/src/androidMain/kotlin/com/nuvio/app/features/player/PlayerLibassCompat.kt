@@ -106,8 +106,10 @@ private fun ExtractorsFactory.withAssMkvSupportCompat(
     return ExtractorsFactory {
         val extractors = createExtractors()
         extractors.forEachIndexed { index, extractor ->
-            if (extractor is MatroskaExtractor) {
-                extractors[index] = VideoCueAssMatroskaExtractor(subtitleParserFactory, assHandler)
+            if (extractor.underlyingImplementation is MatroskaExtractor) {
+                extractors[index] = extractor.replaceInnermostExtractor(
+                    VideoCueAssMatroskaExtractor(subtitleParserFactory, assHandler),
+                )
             }
         }
         extractors

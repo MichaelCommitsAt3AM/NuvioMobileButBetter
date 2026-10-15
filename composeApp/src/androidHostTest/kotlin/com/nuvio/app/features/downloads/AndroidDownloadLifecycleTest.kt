@@ -1,6 +1,7 @@
 package com.nuvio.app.features.downloads
 
 import android.app.job.JobInfo
+import android.util.AtomicFile
 import org.robolectric.RuntimeEnvironment
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -19,7 +20,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34, 36])
+@Config(sdk = [34, 36], shadows = [HostAtomicFileShadow::class])
 class AndroidDownloadLifecycleTest {
     @get:Rule val temporary = TemporaryFolder()
 
@@ -66,6 +67,36 @@ class AndroidDownloadLifecycleTest {
         val transfer = scheduler.store.begin(downloadItem().copy(fileName = "stopped.mkv"))
 
         assertEquals(DownloadStatus.Paused, scheduler.restore(transfer.item).status)
+    }
+
+    @Test
+    fun interruptedStateWriteKeepsLastCommittedProgress() {
+        val directory = temporary.newFolder()
+        val store = AndroidDownloadStore(directory)
+        val transfer = store.begin(downloadItem())
+        val committed = store.update(transfer.item.fileName, transfer.generation) {
+            it.copy(item = it.item.copy(downloadedBytes = 12L, totalBytes = 100L))
+        }
+        val record = directory.listFiles()!!.single { it.name.endsWith(".json") }
+        File(record.path + ".new").writeText("{incomplete")
+
+        assertEquals(committed, AndroidDownloadStore(directory).get(transfer.item.fileName))
+        assertFalse(File(record.path + ".new").exists())
+    }
+
+    @Test
+    fun failedStateWriteKeepsLastCommittedTransfer() {
+        val directory = temporary.newFolder()
+        val store = AndroidDownloadStore(directory)
+        val transfer = store.begin(downloadItem())
+        val record = directory.listFiles()!!.single { it.name.endsWith(".json") }
+        val file = AtomicFile(record)
+        val output = file.startWrite()
+        output.write("{incomplete".toByteArray())
+        file.failWrite(output)
+
+        assertEquals(transfer, AndroidDownloadStore(directory).get(transfer.item.fileName))
+        assertFalse(File(record.path + ".new").exists())
     }
 
     @Test
