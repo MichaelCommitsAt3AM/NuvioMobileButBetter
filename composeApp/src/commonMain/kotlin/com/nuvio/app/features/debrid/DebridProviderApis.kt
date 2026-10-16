@@ -50,6 +50,7 @@ internal data class DebridDeviceAuthorization(
 internal sealed interface DebridDeviceAuthorizationTokenResult {
     data class Authorized(val accessToken: String) : DebridDeviceAuthorizationTokenResult
     data object Pending : DebridDeviceAuthorizationTokenResult
+    data object SlowDown : DebridDeviceAuthorizationTokenResult
     data object Expired : DebridDeviceAuthorizationTokenResult
     data object Unsupported : DebridDeviceAuthorizationTokenResult
     data class Failed(val message: String?) : DebridDeviceAuthorizationTokenResult
@@ -340,16 +341,11 @@ internal fun premiumizeDeviceAuthorizationTokenResult(
         return DebridDeviceAuthorizationTokenResult.Authorized(accessToken)
     }
     return when (body?.error?.lowercase()) {
-        "authorization_pending", "slow_down" -> DebridDeviceAuthorizationTokenResult.Pending
+        "authorization_pending" -> DebridDeviceAuthorizationTokenResult.Pending
+        "slow_down" -> DebridDeviceAuthorizationTokenResult.SlowDown
         "invalid_grant", "expired_token" -> DebridDeviceAuthorizationTokenResult.Expired
         "access_denied" -> DebridDeviceAuthorizationTokenResult.Failed(body.errorDescription)
-        else -> {
-            if (response.status == 400 && body?.error.isNullOrBlank()) {
-                DebridDeviceAuthorizationTokenResult.Pending
-            } else {
-                DebridDeviceAuthorizationTokenResult.Failed(body?.errorDescription ?: body?.error ?: response.rawBody)
-            }
-        }
+        else -> DebridDeviceAuthorizationTokenResult.Failed(body?.errorDescription ?: body?.error)
     }
 }
 

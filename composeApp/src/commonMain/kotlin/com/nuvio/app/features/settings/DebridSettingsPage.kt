@@ -1373,8 +1373,9 @@ private fun DebridDeviceAuthDialog(
         // so if every redeem keeps throwing past this deadline the failure is persistent (e.g.
         // airplane mode / captive portal), not a brief background-network blip — give up then.
         val pollDeadline = TimeSource.Monotonic.markNow() + DEVICE_AUTH_MAX_POLL_DURATION
+        var pollIntervalSeconds = activeSession.intervalSeconds.coerceAtLeast(1).toLong()
         while (true) {
-            delay(activeSession.intervalSeconds.coerceAtLeast(1) * 1_000L)
+            delay(pollIntervalSeconds * 1_000L)
             isPolling = true
             val result = runCatching {
                 DebridProviderApis.apiFor(provider.id)
@@ -1406,6 +1407,11 @@ private fun DebridDeviceAuthDialog(
                 }
 
                 DebridDeviceAuthorizationTokenResult.Pending -> {
+                    statusMessage = waitingMessage
+                }
+
+                DebridDeviceAuthorizationTokenResult.SlowDown -> {
+                    pollIntervalSeconds += 5
                     statusMessage = waitingMessage
                 }
 

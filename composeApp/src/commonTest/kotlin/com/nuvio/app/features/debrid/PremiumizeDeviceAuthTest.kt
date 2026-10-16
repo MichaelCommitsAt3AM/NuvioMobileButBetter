@@ -1,19 +1,60 @@
 package com.nuvio.app.features.debrid
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.decodeFromString
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PremiumizeDeviceAuthTest {
     @Test
-    fun `maps pending and slow down oauth states to pending`() {
+    fun `documented device code response creates a usable session`() {
+        val response = DebridApiJson.json.decodeFromString<PremiumizeDeviceAuthorizationDto>(
+            """{"verification_uri":"https://www.premiumize.me/device","user_code":"abcd-1234","device_code":"device-secret","expires_in":600,"interval":5}""",
+        )
+        val session = assertNotNull(
+            premiumizeDeviceAuthorizationFromResponse(
+                DebridApiResponse(status = 200, body = response, rawBody = ""),
+                DebridProviders.PREMIUMIZE_ID,
+            ),
+        )
+        assertEquals("device-secret", session.deviceCode)
+        assertEquals("abcd-1234", session.userCode)
+        assertEquals("https://www.premiumize.me/device", session.verificationUrl)
+        assertEquals(session.verificationUrl, session.friendlyVerificationUrl)
+        assertEquals(5, session.intervalSeconds)
+        assertNull(
+            premiumizeDeviceAuthorizationFromResponse(
+                DebridApiResponse(status = 400, body = response, rawBody = ""),
+                DebridProviders.PREMIUMIZE_ID,
+            ),
+        )
+    }
+
+    @Test
+    fun `unknown and malformed token errors stop polling without exposing raw responses`() {
+        assertTrue(
+            premiumizeDeviceAuthorizationTokenResult(tokenError("invalid_client")) is
+                DebridDeviceAuthorizationTokenResult.Failed,
+        )
+        assertEquals(
+            DebridDeviceAuthorizationTokenResult.Failed(null),
+            premiumizeDeviceAuthorizationTokenResult(
+                DebridApiResponse(status = 400, body = null, rawBody = "malformed response"),
+            ),
+        )
+    }
+
+    @Test
+    fun `distinguishes pending from requests to slow down polling`() {
         assertEquals(
             DebridDeviceAuthorizationTokenResult.Pending,
             premiumizeDeviceAuthorizationTokenResult(tokenError("authorization_pending")),
         )
         assertEquals(
-            DebridDeviceAuthorizationTokenResult.Pending,
+            DebridDeviceAuthorizationTokenResult.SlowDown,
             premiumizeDeviceAuthorizationTokenResult(tokenError("slow_down")),
         )
     }
