@@ -35,6 +35,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     metrics: PlayerLayoutMetrics,
     horizontalSafePadding: Dp,
     timelineHeight: Dp = 0.dp,
+    sourceLineHeight: Dp = 0.dp,
     onUnlock: () -> Unit,
     showOpeningOverlay: Boolean,
     backdropArtwork: String?,
@@ -131,6 +132,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
                             metrics = metrics,
                             useLegacyLayout = useLegacyLayout,
                             timelineHeight = timelineHeight,
+                            sourceLineHeight = sourceLineHeight,
                             containerHeight = maxHeight,
                         ),
                     )

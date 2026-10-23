@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
@@ -63,9 +64,27 @@ internal fun PlayerToolbar(
     onLockToggle: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onPartyClick: (() -> Unit)? = null,
+    partyActive: Boolean = false,
+    onSwitchEngineClick: (() -> Unit)? = null,
 ) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.weight(1f))
+        if (onSwitchEngineClick != null) {
+            PlayerAction(
+                description = stringResource(Res.string.cd_switch_player_engine),
+                icon = Icons.Rounded.SwapHoriz,
+                onClick = onSwitchEngineClick,
+            )
+        }
+        if (onPartyClick != null) {
+            PlayerAction(
+                description = stringResource(Res.string.party_title),
+                icon = Icons.Rounded.Groups,
+                onClick = onPartyClick,
+                tint = if (partyActive) MaterialTheme.colorScheme.primary else Color.White,
+            )
+        }
         PlayerAction(
             description = stringResource(
                 if (isLocked) Res.string.compose_player_unlock_controls else Res.string.compose_player_lock_controls,
@@ -97,7 +116,6 @@ internal fun PlayerControlActions(
     onSourcesClick: (() -> Unit)?,
     onEpisodesClick: (() -> Unit)?,
     onNextEpisodeClick: (() -> Unit)?,
-    onSwitchEngineClick: (() -> Unit)?,
     onSpeedClick: () -> Unit,
     onResizeModeClick: () -> Unit,
     onVideoSettingsClick: (() -> Unit)?,
@@ -132,12 +150,6 @@ internal fun PlayerControlActions(
             PlayerControlAction(
                 stringResource(Res.string.compose_player_episodes), it,
                 painter = appIconPainter(AppIconResource.PlayerEpisodes),
-            )
-        },
-        onSwitchEngineClick?.let {
-            PlayerControlAction(
-                stringResource(Res.string.cd_switch_player_engine), it,
-                icon = Icons.Rounded.SwapHoriz,
             )
         },
         PlayerControlAction(
@@ -249,13 +261,14 @@ private fun PlayerAction(
     painter: Painter? = null,
     iconSize: Dp = 24.dp,
     showBadge: Boolean = false,
+    tint: Color = Color.White,
 ) {
     Box {
         IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
             if (painter != null) {
-                Icon(painter, description, tint = Color.White, modifier = Modifier.size(iconSize))
+                Icon(painter, description, tint = tint, modifier = Modifier.size(iconSize))
             } else if (icon != null) {
-                Icon(icon, description, tint = Color.White, modifier = Modifier.size(iconSize))
+                Icon(icon, description, tint = tint, modifier = Modifier.size(iconSize))
             }
         }
         if (showBadge) {

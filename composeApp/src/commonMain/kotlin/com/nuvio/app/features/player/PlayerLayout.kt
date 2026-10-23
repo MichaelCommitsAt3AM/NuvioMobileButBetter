@@ -138,10 +138,11 @@ internal fun playerCenterControlsBottomPadding(
     useLegacyLayout: Boolean,
     timelineHeight: Dp,
     containerHeight: Dp,
+    sourceLineHeight: Dp = 0.dp,
 ): Dp {
     if (useLegacyLayout) return metrics.centerLift
     val centerControlHeight = metrics.playIconSize + maxOf(metrics.playButtonPadding, metrics.sideButtonPadding) * 2
-    return maxOf(metrics.centerLift, timelineHeight * 2 + centerControlHeight + 16.dp - containerHeight)
+    return maxOf(metrics.centerLift, (timelineHeight - sourceLineHeight) * 2 + centerControlHeight + 16.dp - containerHeight)
 }
 
 @Composable
