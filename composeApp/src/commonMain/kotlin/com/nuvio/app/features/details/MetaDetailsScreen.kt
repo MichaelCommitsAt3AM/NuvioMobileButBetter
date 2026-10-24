@@ -94,6 +94,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import com.nuvio.app.features.details.components.DetailActions
 import com.nuvio.app.features.details.components.CommentDetailSheet
+import com.nuvio.app.features.details.components.DetailEnrichmentLoadingSection
 import com.nuvio.app.features.details.components.DetailAdditionalInfoSection
 import com.nuvio.app.features.details.components.DetailCastSection
 import com.nuvio.app.features.details.components.DetailCommentsSection
@@ -692,25 +693,26 @@ fun MetaDetailsScreen(
                 val currentEpisodeListSeason = selectedEpisodeListSeason
                     ?.takeIf { it in episodeListGroupedEpisodes }
                     ?: defaultEpisodeListSeason
-                val hasProductionSection = remember(meta) {
-                    meta.productionCompanies.isNotEmpty() || meta.networks.isNotEmpty()
+                val loadingSections = uiState.loadingSections
+                val hasProductionSection = remember(meta, loadingSections) {
+                    meta.productionCompanies.isNotEmpty() || meta.networks.isNotEmpty() || MetaDetailsSection.PRODUCTION in loadingSections
                 }
-                val hasAdditionalInfoSection = remember(meta) {
-                    meta.status != null ||
+                val hasAdditionalInfoSection = remember(meta, loadingSections) {
+                    MetaDetailsSection.DETAILS in loadingSections || meta.status != null ||
                         meta.releaseInfo != null ||
                         meta.runtime != null ||
                         meta.ageRating != null ||
                         meta.country != null ||
                         meta.language != null
                 }
-                val hasCollectionSection = remember(meta) {
-                    meta.collectionName != null && meta.collectionItems.isNotEmpty()
+                val hasCollectionSection = remember(meta, loadingSections) {
+                    (meta.collectionName != null && meta.collectionItems.isNotEmpty()) || MetaDetailsSection.COLLECTION in loadingSections
                 }
-                val hasMoreLikeThisSection = remember(meta) {
-                    meta.moreLikeThis.isNotEmpty()
+                val hasMoreLikeThisSection = remember(meta, loadingSections) {
+                    meta.moreLikeThis.isNotEmpty() || MetaDetailsSection.MORE_LIKE_THIS in loadingSections
                 }
-                val hasTrailersSection = remember(meta) {
-                    meta.trailers.isNotEmpty()
+                val hasTrailersSection = remember(meta, loadingSections) {
+                    meta.trailers.isNotEmpty() || MetaDetailsSection.TRAILERS in loadingSections
                 }
                 val uriHandler = LocalUriHandler.current
                 val inAppTrailerPlaybackEnabled = AppFeaturePolicy.trailerPlaybackMode == TrailerPlaybackMode.IN_APP
@@ -1240,6 +1242,7 @@ fun MetaDetailsScreen(
                                     showManualPlayOption = showManualPlayOption,
                                     preferredEpisodeSeasonNumber = seriesAction?.seasonNumber,
                                     preferredEpisodeNumber = seriesAction?.episodeNumber,
+                                    loadingSections = loadingSections,
                                     hasProductionSection = hasProductionSection,
                                     hasTrailersSection = hasTrailersSection,
                                     hasEpisodes = hasEpisodes,
@@ -1927,6 +1930,7 @@ private fun LazyListScope.configuredMetaSectionItems(
     showManualPlayOption: Boolean,
     preferredEpisodeSeasonNumber: Int?,
     preferredEpisodeNumber: Int?,
+    loadingSections: Set<MetaDetailsSection>,
     hasProductionSection: Boolean,
     hasTrailersSection: Boolean,
     hasEpisodes: Boolean,
@@ -1967,6 +1971,7 @@ private fun LazyListScope.configuredMetaSectionItems(
         metaSectionHasContent(
             key = key,
             meta = meta,
+            loadingSections = loadingSections,
             hasProductionSection = hasProductionSection,
             hasTrailersSection = hasTrailersSection,
             hasEpisodes = hasEpisodes,
@@ -2012,6 +2017,7 @@ private fun LazyListScope.configuredMetaSectionItems(
                     showManualPlayOption = showManualPlayOption,
                     preferredEpisodeSeasonNumber = preferredEpisodeSeasonNumber,
                     preferredEpisodeNumber = preferredEpisodeNumber,
+                    loadingSections = loadingSections,
                     hasProductionSection = hasProductionSection,
                     hasTrailersSection = hasTrailersSection,
                     hasEpisodes = hasEpisodes,
@@ -2195,6 +2201,7 @@ private fun DetailSectionContainer(
 private fun metaSectionHasContent(
     key: MetaScreenSectionKey,
     meta: MetaDetails,
+    loadingSections: Set<MetaDetailsSection>,
     hasProductionSection: Boolean,
     hasTrailersSection: Boolean,
     hasEpisodes: Boolean,
@@ -2210,7 +2217,7 @@ private fun metaSectionHasContent(
         MetaScreenSectionKey.ACTIONS -> true
         MetaScreenSectionKey.OVERVIEW -> true
         MetaScreenSectionKey.PRODUCTION -> hasProductionSection
-        MetaScreenSectionKey.CAST -> meta.cast.isNotEmpty()
+        MetaScreenSectionKey.CAST -> meta.cast.isNotEmpty() || MetaDetailsSection.CAST in loadingSections
         MetaScreenSectionKey.COMMENTS -> shouldShowComments && (isCommentsLoading || comments.isNotEmpty() || !commentsError.isNullOrBlank())
         MetaScreenSectionKey.TRAILERS -> hasTrailersSection
         MetaScreenSectionKey.EPISODES -> hasEpisodes
@@ -2241,6 +2248,7 @@ private fun ConfiguredMetaSections(
     showManualPlayOption: Boolean,
     preferredEpisodeSeasonNumber: Int?,
     preferredEpisodeNumber: Int?,
+    loadingSections: Set<MetaDetailsSection>,
     hasProductionSection: Boolean,
     hasTrailersSection: Boolean,
     hasEpisodes: Boolean,
@@ -2280,7 +2288,7 @@ private fun ConfiguredMetaSections(
             MetaScreenSectionKey.ACTIONS -> true
             MetaScreenSectionKey.OVERVIEW -> true
             MetaScreenSectionKey.PRODUCTION -> hasProductionSection
-            MetaScreenSectionKey.CAST -> meta.cast.isNotEmpty()
+            MetaScreenSectionKey.CAST -> meta.cast.isNotEmpty() || MetaDetailsSection.CAST in loadingSections
             MetaScreenSectionKey.COMMENTS -> shouldShowComments && (isCommentsLoading || comments.isNotEmpty() || !commentsError.isNullOrBlank())
             MetaScreenSectionKey.TRAILERS -> hasTrailersSection
             MetaScreenSectionKey.EPISODES -> hasEpisodes
@@ -2292,6 +2300,19 @@ private fun ConfiguredMetaSections(
 
     @Composable
     fun RenderSection(key: MetaScreenSectionKey, showHeader: Boolean = true) {
+        val pending = key.enrichmentSection()
+        val hasLoadedCards = when (key) {
+            MetaScreenSectionKey.PRODUCTION -> meta.productionCompanies.isNotEmpty() || meta.networks.isNotEmpty()
+            MetaScreenSectionKey.CAST -> meta.cast.isNotEmpty()
+            MetaScreenSectionKey.TRAILERS -> meta.trailers.isNotEmpty()
+            MetaScreenSectionKey.COLLECTION -> meta.collectionItems.isNotEmpty()
+            MetaScreenSectionKey.MORE_LIKE_THIS -> meta.moreLikeThis.isNotEmpty()
+            else -> true
+        }
+        if (pending != null && pending in loadingSections && !hasLoadedCards && !(key == MetaScreenSectionKey.COLLECTION && hasEpisodes)) {
+            DetailEnrichmentLoadingSection(pending, meta, showHeader, horizontalScrollPadding)
+            return
+        }
         when (key) {
             MetaScreenSectionKey.ACTIONS -> {
                 DetailActions(
@@ -2380,7 +2401,7 @@ private fun ConfiguredMetaSections(
             }
             MetaScreenSectionKey.DETAILS -> {
                 if (hasAdditionalInfoSection) {
-                    DetailAdditionalInfoSection(meta = meta, showHeader = showHeader)
+                    DetailAdditionalInfoSection(meta = meta, showHeader = showHeader, loading = MetaDetailsSection.DETAILS in loadingSections)
                 }
             }
             MetaScreenSectionKey.COLLECTION -> {

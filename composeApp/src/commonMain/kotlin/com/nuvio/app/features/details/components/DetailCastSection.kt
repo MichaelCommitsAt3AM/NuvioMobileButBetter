@@ -203,7 +203,7 @@ private fun CastItem(
     }
 }
 
-private data class CastSectionSizing(
+internal data class CastSectionSizing(
     val avatarSize: androidx.compose.ui.unit.Dp,
     val itemWidth: androidx.compose.ui.unit.Dp,
     val avatarGap: androidx.compose.ui.unit.Dp,
@@ -211,7 +211,7 @@ private data class CastSectionSizing(
     val subLabelSize: TextUnit,
 )
 
-private fun castSectionSizing(maxWidthDp: Float): CastSectionSizing =
+internal fun castSectionSizing(maxWidthDp: Float): CastSectionSizing =
     when {
         maxWidthDp >= 1200f -> CastSectionSizing(
             avatarSize = 100.dp,

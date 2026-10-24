@@ -247,7 +247,7 @@ private fun TrailerCard(
     }
 }
 
-private data class TrailerSectionSizing(
+internal data class TrailerSectionSizing(
     val cardWidth: androidx.compose.ui.unit.Dp,
     val cardSpacing: androidx.compose.ui.unit.Dp,
     val cardRadius: androidx.compose.ui.unit.Dp,
@@ -259,7 +259,7 @@ private data class TrailerSectionSizing(
     val metaFontSize: androidx.compose.ui.unit.TextUnit,
 )
 
-private fun trailerSectionSizing(maxWidthDp: Float, userCornerRadius: androidx.compose.ui.unit.Dp = 16.dp): TrailerSectionSizing =
+internal fun trailerSectionSizing(maxWidthDp: Float, userCornerRadius: androidx.compose.ui.unit.Dp = 16.dp): TrailerSectionSizing =
     when {
         maxWidthDp >= 1200f -> TrailerSectionSizing(
             cardWidth = 280.dp,

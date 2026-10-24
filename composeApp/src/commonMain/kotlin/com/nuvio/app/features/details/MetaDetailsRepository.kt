@@ -80,6 +80,7 @@ object MetaDetailsRepository {
     private var activeLoadJob: Job? = null
     private val enrichmentJobsByRequestKey = mutableMapOf<String, Job>()
     private val enrichmentTokensByRequestKey = mutableMapOf<String, Any>()
+    private val loadingSectionsByRequestKey = mutableMapOf<String, Set<MetaDetailsSection>>()
     private val cachedMetaByRequestKey = mutableMapOf<String, CachedMetaEntry>()
 
     fun load(type: String, id: String) {
@@ -133,7 +134,7 @@ object MetaDetailsRepository {
                 // Do not fall back to the addon-only snapshot while a richer result is
                 // already on screen; that would flash the page back to unenriched data.
                 val currentMeta = currentState.meta?.takeIf { it.id == id && it.type == type }
-                _uiState.value = MetaDetailsUiState(meta = (currentMeta ?: cachedBaseMeta).withUnreleasedFilter())
+                _uiState.value = MetaDetailsUiState(meta = (currentMeta ?: cachedBaseMeta).withUnreleasedFilter(), loadingSections = loadingSectionsByRequestKey[requestKey].orEmpty())
                 activeRequestKey = requestKey
                 return
             }
@@ -280,6 +281,7 @@ object MetaDetailsRepository {
         enrichmentJobsByRequestKey.values.forEach(Job::cancel)
         enrichmentJobsByRequestKey.clear()
         enrichmentTokensByRequestKey.clear()
+        loadingSectionsByRequestKey.clear()
         cachedMetaByRequestKey.clear()
         _uiState.value = MetaDetailsUiState()
     }
@@ -496,6 +498,10 @@ object MetaDetailsRepository {
         if (enrichmentJobsByRequestKey[requestKey]?.isActive == true) return
 
         val tmdbSettings = TmdbSettingsRepository.snapshot()
+        loadingSectionsByRequestKey[requestKey] = pendingTmdbSections(meta, tmdbSettings, TmdbSettingsRepository.hasEffectiveAccess())
+        if (activeRequestKey == requestKey) {
+            _uiState.value = _uiState.value.copy(loadingSections = loadingSectionsByRequestKey[requestKey].orEmpty())
+        }
         val token = Any()
         enrichmentTokensByRequestKey[requestKey] = token
         enrichmentJobsByRequestKey[requestKey] = scope.launch {
@@ -508,12 +514,18 @@ object MetaDetailsRepository {
                             fallbackItemId = fallbackItemId,
                             settings = tmdbSettings,
                             includeEpisodes = false,
-                            onProgress = { partial, _ ->
+                            onProgress = { partial, pending ->
                                 withContext(Dispatchers.Main) {
                                     if (enrichmentTokensByRequestKey[requestKey] !== token) return@withContext
                                     latestTmdbMeta = partial
+                                    val remaining = buildSet {
+                                        if (com.nuvio.app.features.tmdb.TmdbEnrichmentStage.TRAILERS in pending) add(MetaDetailsSection.TRAILERS)
+                                        if (com.nuvio.app.features.tmdb.TmdbEnrichmentStage.MORE_LIKE_THIS in pending) add(MetaDetailsSection.MORE_LIKE_THIS)
+                                        if (com.nuvio.app.features.tmdb.TmdbEnrichmentStage.COLLECTION in pending) add(MetaDetailsSection.COLLECTION)
+                                    }
+                                    loadingSectionsByRequestKey[requestKey] = remaining
                                     if (activeRequestKey == requestKey) {
-                                        _uiState.value = MetaDetailsUiState(meta = partial.withUnreleasedFilter())
+                                        _uiState.value = MetaDetailsUiState(meta = partial.withUnreleasedFilter(), loadingSections = remaining)
                                     }
                                 }
                             },
@@ -521,6 +533,7 @@ object MetaDetailsRepository {
                     }
                 }
                 if (enrichmentTokensByRequestKey[requestKey] !== token) return@launch
+                loadingSectionsByRequestKey.remove(requestKey)
                 val tmdbEnrichedMeta = tmdbAttempt ?: latestTmdbMeta
                 cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = meta)
                 if (activeRequestKey == requestKey) {
@@ -578,8 +591,10 @@ object MetaDetailsRepository {
                 log.w(error) { "Background metadata enrichment failed for $requestKey; keeping addon metadata" }
             } finally {
                 if (enrichmentTokensByRequestKey[requestKey] === token) {
+                    loadingSectionsByRequestKey.remove(requestKey)
                     enrichmentTokensByRequestKey.remove(requestKey)
                     enrichmentJobsByRequestKey.remove(requestKey)
+                    if (activeRequestKey == requestKey) _uiState.value = _uiState.value.copy(loadingSections = emptySet())
                 }
             }
         }
@@ -592,6 +607,7 @@ object MetaDetailsRepository {
             .forEach(Job::cancel)
         enrichmentJobsByRequestKey.keys.retainAll(setOf(requestKey))
         enrichmentTokensByRequestKey.keys.retainAll(setOf(requestKey))
+        loadingSectionsByRequestKey.keys.retainAll(setOf(requestKey))
     }
 
     private suspend fun enrichForMetaScreen(

@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -27,6 +28,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.nuvio.app.features.addons.*
 import com.nuvio.app.core.sync.ProfileSettingsSync
@@ -93,10 +95,12 @@ fun ProfileEditScreen(
     var avatarUrl by rememberSaveable { mutableStateOf(currentProfile?.avatarUrl.orEmpty()) }
     var selectedBackgroundId by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundId) }
     var selectedBackgroundUrl by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundUrl) }
-    var savedProfileId by rememberSaveable { mutableStateOf(profile?.profileIndex) }
-    var kidsEnabled by rememberSaveable { mutableStateOf(currentProfile?.kidsEnabled ?: false) }
-    var kidsMaxRating by rememberSaveable { mutableStateOf(currentProfile?.kidsMaxRating ?: "G") }
-    var kidsApiKey by remember { mutableStateOf("") }
+    var savedProfileId by rememberSaveable(profile?.profileIndex) { mutableStateOf(profile?.profileIndex) }
+    var kidsEnabled by rememberSaveable(profile?.profileIndex) { mutableStateOf(currentProfile?.kidsEnabled ?: false) }
+    var kidsMaxRating by rememberSaveable(profile?.profileIndex) { mutableStateOf(currentProfile?.kidsMaxRating ?: "G") }
+    var kidsApiKey by remember(profile?.profileIndex) { mutableStateOf("") }
+    var replacingKidsKey by rememberSaveable(profile?.profileIndex) { mutableStateOf(false) }
+    val hasSavedKidsKey = currentProfile?.kidsEnabled == true && !currentProfile.kidsConfigId.isNullOrBlank()
     var copyAddons by rememberSaveable { mutableStateOf(false) }
     var addonSourceId by rememberSaveable { mutableStateOf<Int?>(null) }
     var addonRows by remember { mutableStateOf<List<AddonRow>>(emptyList()) }
@@ -363,12 +367,32 @@ fun ProfileEditScreen(
                             listOf("G", "PG", "PG-13").forEach { rating ->
                                 PrimaryAddonsModeRow(rating, rating == kidsMaxRating) { kidsMaxRating = rating }
                             }
-                            OutlinedTextField(
-                                value = kidsApiKey, onValueChange = { kidsApiKey = it },
-                                label = { Text("TMDB API key") }, singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
-                            )
-                            Text(if (currentProfile?.kidsEnabled == true) "Key already configured. Leave blank to reuse it. On a new device, enter the key once to change the rating limit." else "Enter your personal TMDB API key. KidsScreen validates and stores it encrypted. Unrated titles are hidden.")
+                            if (hasSavedKidsKey && !replacingKidsKey) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(Icons.Rounded.CheckCircleOutline, contentDescription = null, tint = Color(0xFF4CAF70))
+                                    Text("Key saved", modifier = Modifier.weight(1f))
+                                    OutlinedButton(onClick = { replacingKidsKey = true }, enabled = !isSaving) { Text("Replace key") }
+                                }
+                            } else {
+                                OutlinedTextField(
+                                    value = kidsApiKey, onValueChange = { kidsApiKey = it },
+                                    label = { Text("TMDB API key") }, singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
+                                )
+                                if (hasSavedKidsKey) {
+                                    Text("Enter a replacement key, or leave blank to keep the saved key.")
+                                    OutlinedButton(onClick = { kidsApiKey = ""; replacingKidsKey = false }, enabled = !isSaving) { Text("Cancel replacement") }
+                                } else {
+                                    Text("Enter your personal TMDB API key. KidsScreen validates and stores it encrypted. Unrated titles are hidden.")
+                                }
+                            }
                             Text("This key is used through KidsScreen for TMDB metadata enrichment. A new kids profile starts with enrichment on and cast enrichment off. Turn it off in Settings → Integrations → TMDB at any time.")
                             if (!signedIn) Text("Sign in to set up a kids profile.", color = MaterialTheme.colorScheme.error)
                         }
@@ -448,8 +472,9 @@ fun ProfileEditScreen(
                     scope.launch {
                         saveError = null
                         try {
-                            val saved = savedProfileId?.let { id -> profileState.profiles.find { it.profileIndex == id } }
-                            if (kidsEnabled && saved?.kidsEnabled != true && kidsApiKey.isBlank()) error("Enter your TMDB API key to set up this kids profile.")
+                            val saved = savedProfileId?.let { id -> ProfileRepository.state.value.profiles.find { it.profileIndex == id } } ?: currentProfile
+                            val kidsChanged = kidsConfigurationNeedsUpdate(saved, kidsEnabled, kidsMaxRating, kidsApiKey)
+                            if (kidsEnabled && (saved?.kidsEnabled != true || saved.kidsConfigId.isNullOrBlank()) && kidsApiKey.isBlank()) error("Enter your TMDB API key to set up this kids profile.")
                             val id = savedProfileId ?: ProfileRepository.createProfile(
                                 name = name.trim(), avatarColorHex = accentHex,
                                 avatarId = if (customAvatarUrl == null) selectedAvatarId else null, avatarUrl = customAvatarUrl,
@@ -473,7 +498,7 @@ fun ProfileEditScreen(
                             if (!subtitlesLoading && subtitlesError == null) {
                                 AddonRepository.setRecommendedSubtitles(id, recommendedSubtitles)
                             }
-                            if (kidsEnabled || saved?.kidsEnabled == true) {
+                            if (kidsChanged) {
                                 KidsProfileRepository.configure(id, kidsEnabled, kidsMaxRating, kidsApiKey.trim())
                                 kidsApiKey = ""
                             }

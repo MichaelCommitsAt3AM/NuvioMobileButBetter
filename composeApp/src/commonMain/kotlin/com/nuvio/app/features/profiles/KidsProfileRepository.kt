@@ -7,6 +7,7 @@ import com.nuvio.app.core.network.createApiHttpClient
 import com.nuvio.app.core.sync.putSyncOriginClientId
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.AddonRow
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.ktor.client.request.*
@@ -42,7 +43,10 @@ object KidsProfileRepository {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             if (data != null) { contentType(ContentType.Application.Json); setBody(data.toString()) }
         }
-        check(response.status.value in 200..299) { "KidsScreen rejected the request. Check your connection and TMDB API key." }
+        check(response.status.value in 200..299) {
+            if (path.endsWith("/clone-owned")) "Could not update the saved kids configuration. Check your Nuvio sign-in and connection."
+            else "KidsScreen rejected the request. Check your connection and TMDB API key."
+        }
         return json.parseToJsonElement(response.bodyAsText()).jsonObject
     }
 
@@ -69,6 +73,7 @@ object KidsProfileRepository {
             if (ProfileRepository.state.value.profiles.any { it.addonSyncProfileId == id }) throw KidsProfileException("KIDS_ADDON_DEPENDENTS", "Unlink profiles sharing this profile's add-ons first")
             created = prepareConfiguration(profile, rating, base, apiKey,
                 managementToken = { profile.kidsConfigId?.let(ProfileStorage::loadKidsToken) },
+                ownerSessionToken = { kidsOwnerSessionToken(profile, base, SupabaseProvider.client.auth.currentSessionOrNull()?.accessToken) },
                 provision = { path, data, token -> request(base, path, data, token) },
             )
             if (created != null) {
@@ -143,6 +148,7 @@ object KidsProfileRepository {
         base: String,
         apiKey: String,
         managementToken: () -> String?,
+        ownerSessionToken: () -> String? = { null },
         provision: suspend (String, JsonObject, String?) -> JsonObject,
     ): JsonObject? {
         val unchanged = profile.kidsEnabled && profile.kidsConfigId != null &&
@@ -152,9 +158,11 @@ object KidsProfileRepository {
             return provision("/v1/configurations", buildJsonObject { put("apiKey", apiKey); put("maxRating", rating) }, null)
         }
         if (profile.kidsEnabled && profile.kidsConfigId != null && profile.kidsServiceUrl == base) {
-            val token = managementToken()?.takeIf { it.isNotBlank() }
+            val manager = managementToken()?.takeIf { it.isNotBlank() }
+            val token = manager ?: ownerSessionToken()?.takeIf { it.isNotBlank() }
                 ?: throw KidsProfileException("KIDS_CONFIGURATION_ACCESS_REQUIRED", "This device is missing access to manage the saved KidsScreen configuration. Reconnect it with your TMDB key once")
-            return provision("/v1/configurations/${profile.kidsConfigId}/clone", buildJsonObject { put("maxRating", rating) }, token)
+            val action = if (manager != null) "clone" else "clone-owned"
+            return provision("/v1/configurations/${profile.kidsConfigId}/$action", buildJsonObject { put("maxRating", rating) }, token)
         }
         throw KidsProfileException("TMDB_KEY_REQUIRED", "Enter your TMDB API key to set up this kids profile")
     }

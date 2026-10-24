@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.i18n.localizedMediaStatusLabel
+import com.nuvio.app.core.ui.SkeletonBlock
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.formatRuntimeForDisplay
 import nuvio.composeapp.generated.resources.*
@@ -28,6 +29,7 @@ fun DetailAdditionalInfoSection(
     meta: MetaDetails,
     modifier: Modifier = Modifier,
     showHeader: Boolean = true,
+    loading: Boolean = false,
 ) {
     val isSeriesLike = meta.type == "series" || meta.videos.any { it.season != null || it.episode != null }
     val title = if (isSeriesLike) {
@@ -35,7 +37,7 @@ fun DetailAdditionalInfoSection(
     } else {
         stringResource(Res.string.details_movie_details)
     }
-    val rows = buildList {
+    val rows = buildList<Pair<String, String?>> {
         meta.status?.let {
             add(stringResource(Res.string.details_status) to localizedMediaStatusLabel(it, isSeriesLike))
         }
@@ -49,6 +51,13 @@ fun DetailAdditionalInfoSection(
         meta.country?.let { add(stringResource(Res.string.details_origin_country) to it) }
         meta.language?.let {
             add(stringResource(Res.string.details_original_language) to it.uppercase())
+        }
+        if (loading) {
+            if (meta.status.isNullOrBlank()) add(stringResource(Res.string.details_status) to null)
+            if (meta.runtime.isNullOrBlank()) add(stringResource(Res.string.details_runtime) to null)
+            if (meta.ageRating.isNullOrBlank()) add(stringResource(Res.string.details_certification) to null)
+            if (meta.country.isNullOrBlank()) add(stringResource(Res.string.details_origin_country) to null)
+            if (meta.language.isNullOrBlank()) add(stringResource(Res.string.details_original_language) to null)
         }
     }
     if (rows.isEmpty()) return
@@ -71,7 +80,7 @@ fun DetailAdditionalInfoSection(
 @Composable
 private fun DetailInfoRow(
     label: String,
-    value: String,
+    value: String?,
     showDivider: Boolean,
 ) {
     androidx.compose.foundation.layout.Column(
@@ -91,7 +100,9 @@ private fun DetailInfoRow(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(
+            if (value == null) {
+                SkeletonBlock(modifier = Modifier.weight(1f).padding(start = 16.dp), height = 16.dp)
+            } else Text(
                 text = value,
                 modifier = Modifier
                     .weight(1f)
