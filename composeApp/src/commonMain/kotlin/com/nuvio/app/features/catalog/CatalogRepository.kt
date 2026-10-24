@@ -1,5 +1,7 @@
 package com.nuvio.app.features.catalog
 
+import com.nuvio.app.features.profiles.KidsProfileRepository
+import com.nuvio.app.features.profiles.forKidsCatalogs
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
 import com.nuvio.app.core.poster.withCustomPosterUrls
 import com.nuvio.app.features.collection.CollectionRepository
@@ -100,8 +102,8 @@ object CatalogRepository {
             try {
                 val target = request.target as CatalogTarget.Library
                 LibraryRepository.ensureLoaded()
-                LibraryRepository.uiState.libraryCatalogStates(
-                    target, LibraryRepository.uiState.libraryCatalogOrders(target),
+                LibraryRepository.visibleUiState.libraryCatalogStates(
+                    target, LibraryRepository.visibleUiState.libraryCatalogOrders(target),
                 ).collect { state ->
                     if (activeRequest != request) return@collect
                     CustomPosterUrlRepository.ensureLoaded()
@@ -159,7 +161,9 @@ object CatalogRepository {
                     is CatalogTarget.Server -> ServerCatalog.page(target, skip = requestedSkip)
 
                     is CatalogTarget.Library -> error(getString(Res.string.catalog_load_failed))
-                }.withUnreleasedFilter(request.hideUnreleasedContent)
+                }.withUnreleasedFilter(request.hideUnreleasedContent).let { page ->
+                    page.copy(items = KidsProfileRepository.filter(page.items, { it.type }, { it.id }))
+                }
             }.fold(
                 onSuccess = { page ->
                     if (activeRequest != request) return@fold

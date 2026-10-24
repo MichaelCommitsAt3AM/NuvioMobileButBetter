@@ -256,6 +256,7 @@ fun TabletDetailHero(
     )
     var logoLoadError by remember(meta.id, meta.logo) { mutableStateOf(false) }
     val logoUrl = meta.logo?.takeIf { it.isNotBlank() }
+    var lastLogo by remember(meta.type, meta.id) { mutableStateOf<Painter?>(null) }
 
     Box(
         modifier = Modifier
@@ -277,13 +278,16 @@ fun TabletDetailHero(
             if (logoUrl != null && !logoLoadError) {
                 AsyncImage(
                     model = logoUrl,
+                    placeholder = lastLogo,
+                    error = lastLogo,
+                    onSuccess = { lastLogo = it.painter },
                     contentDescription = stringResource(Res.string.detail_logo_content_description, meta.name),
                     modifier = Modifier
                         .widthIn(max = 560.dp)
                         .height(120.dp),
                     alignment = Alignment.CenterStart,
                     contentScale = ContentScale.Fit,
-                    onError = { logoLoadError = true },
+                    onError = { logoLoadError = lastLogo == null },
                 )
             } else {
                 Text(

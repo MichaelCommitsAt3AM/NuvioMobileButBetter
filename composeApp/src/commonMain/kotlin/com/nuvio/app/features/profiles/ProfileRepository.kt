@@ -80,6 +80,21 @@ object ProfileRepository {
 
     val activeProfileId: Int get() = activeProfileIndex
 
+    suspend fun setAddonProfileLink(target: Int, source: Int?) {
+        validateAddonProfileLink(_state.value.profiles, target, source)
+        val existing = _state.value.profiles.first { it.profileIndex == target }
+        if (existing.addonSyncProfileId == source) return
+        AddonRepository.flushPendingPushes()
+        check(!AuthRepository.state.value.isAnonymous) { "Sign in to change add-on sharing" }
+        SupabaseProvider.client.postgrest.rpc("sync_set_profile_addon_link", buildJsonObject {
+            put("p_profile_id", target)
+            put("p_source_profile_id", source?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
+            putSyncOriginClientId()
+        })
+        pullProfiles()
+        check(_state.value.profiles.first { it.profileIndex == target }.addonSyncProfileId == source) { "Could not update add-on sharing" }
+    }
+
     fun setRememberLastProfileEnabled(enabled: Boolean) {
         if (_state.value.rememberLastProfileEnabled == enabled) return
 
@@ -209,8 +224,8 @@ object ProfileRepository {
             SupabaseProvider.client.postgrest.rpc("sync_push_profiles", params)
             pullProfiles()
         } catch (e: Throwable) {
-            if (AuthRepository.signOutIfSessionInvalid(e, "Profile push")) return
-            log.e(e) { "Failed to push profiles" }
+            AuthRepository.signOutIfSessionInvalid(e, "Profile push")
+            throw e
         }
     }
 
@@ -221,9 +236,9 @@ object ProfileRepository {
         avatarUrl: String? = null,
         usesPrimaryAddons: Boolean = false,
         primaryAddonsAllowlist: List<String>? = null,
-    ) {
+    ): Int {
         val existing = _state.value.profiles
-        val nextIndex = ((1..MAX_PROFILES).toSet() - existing.map { it.profileIndex }.toSet()).minOrNull() ?: return
+        val nextIndex = ((1..MAX_PROFILES).toSet() - existing.map { it.profileIndex }.toSet()).minOrNull() ?: error("Maximum number of profiles reached")
 
         val allPayloads = existing.map { profile ->
             ProfilePushPayload(
@@ -255,6 +270,7 @@ object ProfileRepository {
         if (usesPrimaryAddons && _state.value.profiles.any { it.profileIndex == nextIndex }) {
             AddonRepository.copyPrimaryAddonsToProfile(nextIndex, primaryAddonsAllowlist)
         }
+        return nextIndex
     }
 
     suspend fun updateProfile(
@@ -321,6 +337,7 @@ object ProfileRepository {
             if (_state.value.activeProfile != null) {
                 activeProfileIndex = _state.value.activeProfile!!.profileIndex
             }
+            com.nuvio.app.features.tmdb.TmdbSettingsStorage.saveKidsProfileSettings(profileIndex, "", null)
             persist()
             return
         }
@@ -330,6 +347,7 @@ object ProfileRepository {
                 putSyncOriginClientId()
             }
             SupabaseProvider.client.postgrest.rpc("sync_delete_profile_data", params)
+            com.nuvio.app.features.tmdb.TmdbSettingsStorage.saveKidsProfileSettings(profileIndex, "", null)
             ServerRepository.removeProfile(profileIndex)
             pullProfiles()
         } catch (e: Throwable) {
@@ -431,7 +449,7 @@ object ProfileRepository {
     private fun applyPayloadsLocally(payloads: List<ProfilePushPayload>) {
         val authState = AuthRepository.state.value as? AuthState.Authenticated ?: return
         val profiles = payloads.map { p ->
-            NuvioProfile(
+            (_state.value.profiles.find { it.profileIndex == p.profileIndex } ?: NuvioProfile()).copy(
                 id = "",
                 userId = authState.userId,
                 profileIndex = p.profileIndex,

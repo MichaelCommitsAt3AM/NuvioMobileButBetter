@@ -150,6 +150,7 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
         initialLoadCompleted = false
 
         try {
+            com.nuvio.app.features.profiles.KidsProfileRepository.requireMedia(parentMetaType, parentMetaId)
             val localUrl = P2pStreamingEngine.startStream(
                 P2pStreamRequest(
                     infoHash = infoHash,

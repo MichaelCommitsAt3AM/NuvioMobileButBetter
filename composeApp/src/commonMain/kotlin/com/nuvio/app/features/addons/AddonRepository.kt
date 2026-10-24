@@ -6,6 +6,8 @@ import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.isAnonymous
 import com.nuvio.app.core.sync.putSyncOriginClientId
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.profiles.kidsManifestUrl
+import com.nuvio.app.features.profiles.addonGroupMembers
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
@@ -33,7 +35,7 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 
 @Serializable
-private data class AddonRow(
+data class AddonRow(
     val url: String,
     val name: String? = null,
     val enabled: Boolean = true,
@@ -69,7 +71,13 @@ object AddonRepository {
         currentProfileId = effectiveProfileId
         log.d { "initialize() — loading local addons for profile $currentProfileId" }
 
-        val storedUrls = dedupeManifestUrls(AddonStorage.loadInstalledAddonUrls(currentProfileId))
+        val localRows = AddonStorage.loadInstalledAddonUrls(currentProfileId).mapIndexed { index, url ->
+            AddonRow(url, enabled = AddonStorage.loadAddonEnabledStates(currentProfileId)[url] ?: true, sortOrder = index)
+        }
+        val reconciled = reconcileProfileAddons(localRows, ProfileRepository.state.value.activeProfile)
+        val storedUrls = dedupeManifestUrls(reconciled.map { it.url })
+        AddonStorage.saveInstalledAddonUrls(currentProfileId, storedUrls)
+        AddonStorage.saveAddonEnabledStates(currentProfileId, reconciled.associate { it.url to it.enabled })
         val enabledByUrl = loadLocalEnabledStates()
         log.d { "initialize() — local addon count: ${storedUrls.size}" }
         if (storedUrls.isEmpty()) return
@@ -132,7 +140,7 @@ object AddonRepository {
                 .decodeList<AddonRow>()
 
             val rowsByUrl = linkedMapOf<String, AddonRow>()
-            rows.forEach { row ->
+            reconcileProfileAddons(rows, ProfileRepository.state.value.profiles.find { it.profileIndex == profileId }).forEach { row ->
                 val manifestUrl = ensureManifestSuffix(row.url)
                 if (!rowsByUrl.containsKey(manifestUrl)) {
                     rowsByUrl[manifestUrl] = row.copy(url = manifestUrl)
@@ -218,6 +226,7 @@ object AddonRepository {
     }
 
     fun removeAddon(manifestUrl: String) {
+        if (manifestUrl == ProfileRepository.state.value.activeProfile?.kidsManifestUrl()) return
         log.i { "removeAddon() — $manifestUrl" }
         var changed = false
         _uiState.update { current ->
@@ -254,6 +263,7 @@ object AddonRepository {
     }
 
     fun setAddonEnabled(manifestUrl: String, enabled: Boolean) {
+        if (!enabled && manifestUrl == ProfileRepository.state.value.activeProfile?.kidsManifestUrl()) return
         var shouldRefresh = false
         var changed = false
         _uiState.update { current ->
@@ -409,6 +419,75 @@ object AddonRepository {
         )
     }
 
+    suspend fun flushPendingPushes() {
+        pushJobsByProfile.values.toList().forEach { it.join() }
+    }
+
+    suspend fun readProfileAddonSnapshot(profileId: Int): List<AddonRow> {
+        if (!AuthRepository.state.value.isAnonymous) {
+            return SupabaseProvider.client.postgrest.from("addons").select {
+                filter { eq("profile_id", profileId) }
+                order("sort_order", Order.ASCENDING)
+            }.decodeList<AddonRow>()
+        }
+        val enabled = AddonStorage.loadAddonEnabledStates(profileId)
+        return AddonStorage.loadInstalledAddonUrls(profileId).mapIndexed { index, url ->
+            AddonRow(url, enabled = enabled[url] ?: true, sortOrder = index)
+        }
+    }
+
+    fun applyProfileAddonSnapshot(profileIds: List<Int>, rows: List<AddonRow>) {
+        val normalized = rows.sortedBy { it.sortOrder }.map { it.copy(url = ensureManifestSuffix(it.url)) }.distinctBy { it.url }
+        profileIds.forEach { profileId ->
+            AddonStorage.saveInstalledAddonUrls(profileId, normalized.map { it.url })
+            AddonStorage.saveAddonEnabledStates(profileId, normalized.associate { it.url to it.enabled })
+        }
+        if (currentProfileId in profileIds) {
+            cancelActiveRefreshes()
+            val existing = _uiState.value.addons.associateBy { it.manifestUrl }
+            _uiState.value = AddonsUiState(addons = normalized.map { row ->
+                existing[row.url].toPendingAddon(row.url, row.name, row.enabled).copy(isRefreshing = false)
+            })
+            initialized = true
+            _uiState.value.addons.forEach { addon ->
+                if (!addon.enabled) return@forEach
+                val needsManifest = addon.manifest == null
+                if (needsManifest) refreshAddon(addon.manifestUrl)
+            }
+        }
+    }
+
+    suspend fun setRecommendedSubtitles(profileId: Int, enabled: Boolean) {
+        flushPendingPushes()
+        val root = com.nuvio.app.features.profiles.addonGroupRoot(ProfileRepository.state.value.profiles, profileId)
+        val rows = withRecommendedSubtitles(readProfileAddonSnapshot(root)).map {
+            if (ensureManifestSuffix(it.url) == RECOMMENDED_SUBTITLES_URL) it.copy(enabled = enabled) else it
+        }
+        saveIndependentProfileAddons(root, rows)
+    }
+
+    /** Import into an independent target without losing its order or existing settings. */
+    suspend fun importProfileAddons(profileId: Int, imported: List<AddonRow>) {
+        flushPendingPushes()
+        val existing = readProfileAddonSnapshot(profileId)
+        saveIndependentProfileAddons(profileId, mergeProfileAddonImport(existing, imported))
+    }
+
+    /** Persist a one-time selection after the caller has removed the target's live link. */
+    suspend fun saveIndependentProfileAddons(profileId: Int, rows: List<AddonRow>) {
+        flushPendingPushes()
+        check(ProfileRepository.state.value.profiles.first { it.profileIndex == profileId }.addonSyncProfileId == null)
+        val ordered = rows.distinctBy { it.url }.mapIndexed { index, row -> row.copy(sortOrder = index) }
+        if (!AuthRepository.state.value.isAnonymous) {
+            SupabaseProvider.client.postgrest.rpc("sync_push_addons", buildJsonObject {
+                put("p_profile_id", profileId)
+                put("p_addons", json.encodeToJsonElement(ordered.map { AddonPushItem(it.url, it.name.orEmpty(), it.enabled, it.sortOrder) }))
+                putSyncOriginClientId()
+            })
+        }
+        applyProfileAddonSnapshot(addonGroupMembers(ProfileRepository.state.value.profiles, profileId), ordered)
+    }
+
     private fun loadLocalEnabledStates(): Map<String, Boolean> =
         AddonStorage.loadAddonEnabledStates(currentProfileId)
             .mapKeys { (url, _) -> ensureManifestSuffix(url) }
@@ -544,7 +623,7 @@ private fun ManagedAddon?.toPendingAddon(
 private fun dedupeManifestUrls(urls: List<String>): List<String> =
     urls.map(::ensureManifestSuffix).distinct()
 
-private fun ensureManifestSuffix(url: String): String {
+internal fun ensureManifestSuffix(url: String): String {
     val path = url.substringBefore("?").trimEnd('/')
     val query = url.substringAfter("?", "")
     val withSuffix = if (path.endsWith("/manifest.json")) path else "$path/manifest.json"

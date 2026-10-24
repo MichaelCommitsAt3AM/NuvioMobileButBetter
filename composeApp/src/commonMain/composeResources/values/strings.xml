@@ -1265,7 +1265,7 @@
     <string name="settings_playback_vod_cache_size_value">%1$d MB</string>
     <string name="settings_playback_vod_cache_warning">Disk writes continue while a cached stream plays. A new size applies the next time the app starts.</string>
     <string name="settings_tmdb_api_key_label">API key</string>
-    <string name="settings_tmdb_api_key_override_description">Use your own TMDB API key, or leave blank to use the default.</string>
+    <string name="settings_tmdb_api_key_override_description">Use your own TMDB API key, or leave blank to use the default. Kids profiles can use the key held by KidsScreen without saving it on this device.</string>
     <string name="settings_tmdb_personal_api_key">Personal API key</string>
     <string name="settings_tmdb_enable_enrichment">Enable TMDB Enrichment</string>
     <string name="settings_tmdb_enable_enrichment_description">Use TMDB as a metadata source to enhance addon data</string>

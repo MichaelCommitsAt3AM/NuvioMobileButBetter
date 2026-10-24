@@ -139,7 +139,7 @@ class HomeCatalogSettingsRepositoryTest {
                 AddonStorage.saveInstalledAddonUrls(ProfileRepository.activeProfileId, listOf(server.url("/manifest.json").toString()))
                 AddonRepository.initialize()
                 withTimeout(5_000) { AddonRepository.awaitManifestsLoaded() }
-                val addons = AddonRepository.uiState.value.addons
+                val addons = AddonRepository.uiState.value.addons.filter { it.manifestUrl != com.nuvio.app.features.addons.RECOMMENDED_SUBTITLES_URL }
                 assertNotNull(addons.single().manifest)
                 HomeCatalogSettingsRepository.setHeroEnabled(true)
                 val initialCollection = collection().copy(

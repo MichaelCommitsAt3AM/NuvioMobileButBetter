@@ -131,6 +131,20 @@ object HomeCatalogSettingsSyncService {
         }
     }
 
+    suspend fun seedProfileFrom(sourceProfileId: Int, profileId: Int) {
+        check(currentPullToken(sourceProfileId) != null) { "Sign in to copy settings" }
+        val payload = if (sourceProfileId == ProfileRepository.activeProfileId) {
+            json.encodeToJsonElement(SyncHomeCatalogPayload.serializer(), HomeCatalogSettingsRepository.exportToSyncPayload()).jsonObject
+        } else {
+            (fetchRemoteBlob(sourceProfileId) ?: if (sourceProfileId != 1) fetchRemoteBlob(1) else null)?.settingsJson
+                ?: json.encodeToJsonElement(SyncHomeCatalogPayload.serializer(), SyncHomeCatalogPayload()).jsonObject
+        }
+        SupabaseProvider.client.postgrest.rpc("sync_push_home_catalog_settings", buildJsonObject {
+            put("p_profile_id", profileId); put("p_platform", HOME_CATALOG_SHARED_SYNC_PLATFORM)
+            put("p_settings_json", payload); putSyncOriginClientId()
+        })
+    }
+
     fun triggerPush() {
         val requestedToken = currentPullToken()
         if (requestedToken == null || !hasCompletedInitialPull(requestedToken)) {

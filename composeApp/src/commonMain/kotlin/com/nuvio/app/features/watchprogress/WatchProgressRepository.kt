@@ -239,6 +239,12 @@ object WatchProgressRepository {
     private val _uiState = MutableStateFlow(WatchProgressUiState())
     val uiState: StateFlow<WatchProgressUiState> = _uiState.asStateFlow()
 
+    val visibleUiState: StateFlow<WatchProgressUiState> = com.nuvio.app.features.profiles.kidsVisibleState(
+        uiState, syncScope, WatchProgressUiState(),
+    ) { state -> state.copy(entries = com.nuvio.app.features.profiles.KidsProfileRepository.filter(
+        state.entries, { it.parentMetaType }, { it.parentMetaId },
+    )) }
+
     private var hasLoaded = false
     private var hasLoadedNuvioRemoteProgress = false
     private var currentProfileId: Int = 1

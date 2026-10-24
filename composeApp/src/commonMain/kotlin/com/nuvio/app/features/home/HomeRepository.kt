@@ -1,5 +1,7 @@
 package com.nuvio.app.features.home
 
+import com.nuvio.app.features.profiles.KidsProfileRepository
+import com.nuvio.app.features.profiles.forKidsCatalogs
 import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
@@ -48,7 +50,7 @@ object HomeRepository {
     private var lastErrorMessage: String? = null
 
     fun refresh(addons: List<ManagedAddon>, force: Boolean = false) {
-        val activeAddons = addons.enabledAddons()
+        val activeAddons = addons.enabledAddons().forKidsCatalogs()
         val requests = buildHomeCatalogDefinitions(activeAddons)
         currentDefinitions = requests
         val requestCacheKeys = requests.mapTo(mutableSetOf(), HomeCatalogDefinition::cacheKey)
@@ -148,7 +150,7 @@ object HomeRepository {
             requestKey = currentRequestKey,
         )
         ensureCollectionHeroFallback(
-            addons = AddonRepository.uiState.value.addons.enabledAddons(),
+            addons = AddonRepository.uiState.value.addons.enabledAddons().forKidsCatalogs(),
             forceRefresh = false,
             refreshSources = false,
             requestKey = currentRequestKey,
@@ -353,6 +355,7 @@ object HomeRepository {
     }
 
     private fun enabledCollectionsForHero(snapshot: HomeCatalogSettingsSnapshot): List<Collection> {
+        if (KidsProfileRepository.active != null) return emptyList()
         val preferences = snapshot.preferences
         return CollectionRepository.collections.value
             .filter { collection ->

@@ -109,7 +109,10 @@ fun TmdbEntityBrowseScreen(
                 repo.ensureLoaded()
                 repo.patternForScreen(com.nuvio.app.core.poster.CustomPosterScreen.DETAILS)
             }
-            EntityBrowseUiState.Success(data.withCustomPosterUrls(pattern))
+            val safeData = data.copy(rails = data.rails.map { rail ->
+                rail.copy(items = com.nuvio.app.features.profiles.KidsProfileRepository.filter(rail.items, { it.type }, { it.id }))
+            })
+            EntityBrowseUiState.Success(safeData.withCustomPosterUrls(pattern))
         } else {
             EntityBrowseUiState.Error(loadFailedMessage)
         }

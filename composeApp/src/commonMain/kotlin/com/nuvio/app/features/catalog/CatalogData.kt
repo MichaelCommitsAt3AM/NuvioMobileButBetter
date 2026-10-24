@@ -1,5 +1,7 @@
 package com.nuvio.app.features.catalog
 
+import com.nuvio.app.features.profiles.KidsProfileRepository
+import com.nuvio.app.features.profiles.forKidsCatalogs
 import com.nuvio.app.features.addons.AddonCatalog
 import com.nuvio.app.features.addons.buildAddonResourceUrl
 import com.nuvio.app.features.addons.fetchAddonResponseText
@@ -99,7 +101,7 @@ suspend fun fetchCatalogPage(
         null
     }
     return CatalogPage(
-        items = parsed.items,
+        items = KidsProfileRepository.filter(parsed.items, { it.type }, { it.id }),
         rawItemCount = parsed.rawItemCount,
         nextSkip = nextSkip,
     )

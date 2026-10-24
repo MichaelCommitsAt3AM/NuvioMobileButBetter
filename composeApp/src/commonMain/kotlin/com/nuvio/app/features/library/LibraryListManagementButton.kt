@@ -25,7 +25,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun LibraryListManagementButton() {
     val profile by ProfileRepository.state.collectAsStateWithLifecycle()
     val connections by TrackingProviderRegistry.connectedProviderIds.collectAsStateWithLifecycle()
-    val library by LibraryRepository.uiState.collectAsStateWithLifecycle()
+    val library by LibraryRepository.visibleUiState.collectAsStateWithLifecycle()
     val context = remember(profile, connections, library) { LibraryRepository.listManagementContext() }
     val controller = remember { LibraryListManagementController(LibraryRepository::listManagementContext, LibraryRepository::listManager) }
     val state by controller.state.collectAsStateWithLifecycle()

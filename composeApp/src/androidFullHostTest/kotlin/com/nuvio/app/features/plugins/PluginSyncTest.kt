@@ -150,24 +150,25 @@ class PluginSyncTest {
     }
 
     @Test
-    fun emptyRemoteRemovesCachedAddonsWithoutUploadingAndStaysEmptyAfterReload(): Unit = runBlocking {
-        AddonStorage.saveInstalledAddonUrls(1, listOf(manifestUrl))
-        AddonStorage.saveAddonEnabledStates(1, mapOf(manifestUrl to false))
+    fun emptyRemoteRemovesCachedAddonsButKeepsRecommendedSubtitlesWithoutUploading(): Unit = runBlocking {
+        val recommended = com.nuvio.app.features.addons.RECOMMENDED_SUBTITLES_URL
+        AddonStorage.saveInstalledAddonUrls(1, listOf(manifestUrl, recommended))
+        AddonStorage.saveAddonEnabledStates(1, mapOf(manifestUrl to false, recommended to false))
         AddonRepository.initialize()
-        assertEquals(1, AddonRepository.uiState.value.addons.size)
+        assertEquals(2, AddonRepository.uiState.value.addons.size)
         respond("[]")
 
         AddonRepository.pullFromServer(1)
 
-        assertTrue(AddonRepository.uiState.value.addons.isEmpty())
-        assertTrue(AddonStorage.loadInstalledAddonUrls(1).isEmpty())
-        assertTrue(AddonStorage.loadAddonEnabledStates(1).isEmpty())
+        assertTrue(AddonRepository.uiState.value.addons.map { it.manifestUrl } == listOf(recommended))
+        assertTrue(AddonStorage.loadInstalledAddonUrls(1) == listOf(recommended))
+        assertTrue(AddonStorage.loadAddonEnabledStates(1).keys == setOf(recommended))
         AddonRepository.clearLocalState()
         AddonRepository.initialize()
         respond("[]")
         AddonRepository.pullFromServer(1)
 
-        assertTrue(AddonRepository.uiState.value.addons.isEmpty())
+        assertTrue(AddonRepository.uiState.value.addons.map { it.manifestUrl } == listOf(recommended))
         assertPullsOnly("addons", count = 2)
     }
 

@@ -1,5 +1,7 @@
 package com.nuvio.app.features.search
 
+import com.nuvio.app.features.profiles.KidsProfileRepository
+import com.nuvio.app.features.profiles.forKidsCatalogs
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.i18n.localizedMediaTypeLabel
 import com.nuvio.app.features.addons.AddonCatalog
@@ -86,11 +88,11 @@ object SearchRepository {
             return
         }
 
-        val enabledAddons = addons.enabledAddons()
+        val enabledAddons = addons.enabledAddons().forKidsCatalogs()
         val hasPendingAddonManifests = enabledAddons.hasPendingEnabledManifests()
         val addonManifestErrorMessage = enabledAddons.firstEnabledManifestError()
         val activeAddons = enabledAddons.filter { it.manifest != null }
-        val serverSearches = ServerCatalog.searchTargets()
+        val serverSearches = if (KidsProfileRepository.active == null) ServerCatalog.searchTargets() else emptyList()
         if (activeAddons.isEmpty() && serverSearches.isEmpty()) {
             activeJob?.cancel()
             lastRequestKey = null
@@ -241,11 +243,11 @@ object SearchRepository {
         addons: List<ManagedAddon>,
         forceRefresh: Boolean = false,
     ) {
-        val enabledAddons = addons.enabledAddons()
+        val enabledAddons = addons.enabledAddons().forKidsCatalogs()
         val hasPendingAddonManifests = enabledAddons.hasPendingEnabledManifests()
         val addonManifestErrorMessage = enabledAddons.firstEnabledManifestError()
         val activeAddons = enabledAddons.filter { it.manifest != null }
-        val serverLibraries = ServerCatalog.titleLibraries()
+        val serverLibraries = if (KidsProfileRepository.active == null) ServerCatalog.titleLibraries() else emptyList()
         if (activeAddons.isEmpty() && serverLibraries.isEmpty()) {
             activeDiscoverJob?.cancel()
             discoverSources = emptyList()

@@ -78,7 +78,7 @@ internal fun rememberPlaybackAvailability(): PlaybackAvailability {
     }
     val downloads by remember {
         DownloadsRepository.ensureLoaded()
-        DownloadsRepository.uiState
+        DownloadsRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     val servers by remember {
         ServerRepository.ensureLoaded()

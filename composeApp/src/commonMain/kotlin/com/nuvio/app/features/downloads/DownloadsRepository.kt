@@ -18,6 +18,11 @@ object DownloadsRepository {
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.asStateFlow()
 
+    private val visibilityScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+    val visibleUiState = com.nuvio.app.features.profiles.kidsVisibleState(uiState, visibilityScope, DownloadsUiState()) { state ->
+        state.copy(items = com.nuvio.app.features.profiles.KidsProfileRepository.filter(state.items, { it.parentMetaType }, { it.parentMetaId }))
+    }
+
     private val _hasUnseenCompleted = MutableStateFlow(false)
     val hasUnseenCompleted: StateFlow<Boolean> = _hasUnseenCompleted.asStateFlow()
 

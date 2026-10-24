@@ -1,5 +1,7 @@
 package com.nuvio.app.features.home
 
+import com.nuvio.app.features.profiles.KidsProfileRepository
+import com.nuvio.app.features.profiles.forKidsCatalogs
 import com.nuvio.app.core.i18n.localizedMediaTypeLabel
 import com.nuvio.app.features.addons.AddonCatalog
 import com.nuvio.app.features.addons.AddonManifest
@@ -32,7 +34,7 @@ data class HomeCatalogDefinition(
 }
 
 fun buildAddonCatalogRefreshSignature(addons: List<ManagedAddon>): List<String> =
-    addons.enabledAddons().map { addon ->
+    addons.enabledAddons().forKidsCatalogs().map { addon ->
         val signature = CatalogDescriptorSignature()
         signature.addAddon(addon)
         addon.manifest?.let { manifest ->
@@ -43,7 +45,7 @@ fun buildAddonCatalogRefreshSignature(addons: List<ManagedAddon>): List<String> 
     }.sorted()
 
 fun buildHomeCatalogDefinitions(addons: List<ManagedAddon>): List<HomeCatalogDefinition> =
-    addons.enabledAddons().mapNotNull { addon ->
+    addons.enabledAddons().forKidsCatalogs().mapNotNull { addon ->
         val manifest = addon.manifest ?: return@mapNotNull null
         addon to manifest
     }.flatMap { (addon, manifest) ->
@@ -68,7 +70,7 @@ fun buildHomeCatalogDefinitions(addons: List<ManagedAddon>): List<HomeCatalogDef
                     descriptorSignature = buildHomeCatalogDescriptorSignature(addon, manifest, catalog),
                 )
             }
-    }.distinctBy(HomeCatalogDefinition::key) + ServerCatalog.homeDefinitions()
+    }.distinctBy(HomeCatalogDefinition::key) + if (KidsProfileRepository.active == null) ServerCatalog.homeDefinitions() else emptyList()
 
 private fun buildHomeCatalogDescriptorSignature(
     addon: ManagedAddon,

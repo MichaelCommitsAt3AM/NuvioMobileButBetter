@@ -37,7 +37,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun LibraryDownloadsButton(onClick: () -> Unit) {
     val downloads by remember {
         DownloadsRepository.ensureLoaded()
-        DownloadsRepository.uiState
+        DownloadsRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     val hasUnseenCompleted by DownloadsRepository.hasUnseenCompleted.collectAsStateWithLifecycle()
 

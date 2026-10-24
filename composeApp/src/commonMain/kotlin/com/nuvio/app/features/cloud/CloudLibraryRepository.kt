@@ -98,6 +98,9 @@ object CloudLibraryRepository {
     private val _uiState = MutableStateFlow(CloudLibraryUiState())
     private var loadedConnectionKeys: List<CloudConnectionKey> = emptyList()
     val uiState = _uiState.asStateFlow()
+    val visibleUiState = com.nuvio.app.features.profiles.kidsVisibleState(
+        uiState, scope, CloudLibraryUiState(),
+    ) { it.copy(providers = it.providers.map { provider -> provider.copy(items = emptyList()) }) }
 
     fun ensureLoaded() {
         DebridSettingsRepository.ensureLoaded()

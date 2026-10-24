@@ -158,9 +158,9 @@ fun HomeScreen(
     val continueWatchingPreferences by ContinueWatchingPreferencesRepository.uiState.collectAsStateWithLifecycle()
     val watchedUiState by WatchedRepository.uiState.collectAsStateWithLifecycle()
     val fullyWatchedSeriesKeys by WatchedRepository.fullyWatchedSeriesKeys.collectAsStateWithLifecycle()
-    val watchProgressUiState by WatchProgressRepository.uiState.collectAsStateWithLifecycle()
+    val watchProgressUiState by WatchProgressRepository.visibleUiState.collectAsStateWithLifecycle()
     val effectiveWatchProgressSource = watchProgressUiState.source
-    val cloudLibraryUiState by CloudLibraryRepository.uiState.collectAsStateWithLifecycle()
+    val cloudLibraryUiState by CloudLibraryRepository.visibleUiState.collectAsStateWithLifecycle()
     val networkStatusUiState by NetworkStatusRepository.uiState.collectAsStateWithLifecycle()
     val trackingSettingsUiState by remember {
         TrackingSettingsRepository.ensureLoaded()

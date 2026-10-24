@@ -59,6 +59,16 @@ object LibraryRepository {
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
 
+    val visibleUiState: StateFlow<LibraryUiState> = com.nuvio.app.features.profiles.kidsVisibleState(
+        uiState, syncScope, LibraryUiState(),
+    ) { state ->
+        val items = com.nuvio.app.features.profiles.KidsProfileRepository.filter(state.items, { it.type }, { it.id })
+        val keys = items.map { it.type to it.id }.toSet()
+        state.copy(items = items, sections = state.sections.map { section ->
+            section.copy(items = section.items.filter { (it.type to it.id) in keys })
+        }.filter { it.items.isNotEmpty() })
+    }
+
     private val localState = LibraryLocalState()
     private val loadLock = SynchronizedObject()
     private val nuvioSyncMutex = Mutex()

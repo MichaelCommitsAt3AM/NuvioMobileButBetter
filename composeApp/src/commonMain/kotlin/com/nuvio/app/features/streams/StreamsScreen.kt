@@ -145,7 +145,7 @@ fun StreamsScreen(
     }.collectAsStateWithLifecycle()
     val watchProgressUiState by remember {
         WatchProgressRepository.ensureLoaded()
-        WatchProgressRepository.uiState
+        WatchProgressRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     val metaScreenSettings by remember {
         MetaScreenSettingsRepository.ensureLoaded()

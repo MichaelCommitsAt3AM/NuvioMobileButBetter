@@ -118,7 +118,11 @@ fun PersonDetailScreen(
                 repo.ensureLoaded()
                 repo.patternForScreen(com.nuvio.app.core.poster.CustomPosterScreen.DETAILS)
             }
-            PersonDetailUiState.Success(detail.withCustomPosterUrls(pattern))
+            val safeDetail = detail.copy(
+                movieCredits = com.nuvio.app.features.profiles.KidsProfileRepository.filter(detail.movieCredits, { it.type }, { it.id }),
+                tvCredits = com.nuvio.app.features.profiles.KidsProfileRepository.filter(detail.tvCredits, { it.type }, { it.id }),
+            )
+            PersonDetailUiState.Success(safeDetail.withCustomPosterUrls(pattern))
         } else {
             PersonDetailUiState.Error(getString(Res.string.person_load_failed, personName))
         }

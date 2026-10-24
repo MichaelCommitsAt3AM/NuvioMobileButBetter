@@ -7,6 +7,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import com.nuvio.app.features.profiles.KidsProfileRepository
+import com.nuvio.app.features.profiles.ProfileRepository
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +36,19 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
+    val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
+    val kidsProfile = profileState.activeProfile?.takeIf { it.kidsEnabled }
+    var kidsAuthorized by remember(kidsProfile, parentMetaType, parentMetaId) { mutableStateOf(kidsProfile == null) }
+    LaunchedEffect(kidsProfile, parentMetaType, parentMetaId) {
+        if (kidsProfile == null) return@LaunchedEffect
+        try {
+            KidsProfileRepository.requireMedia(parentMetaType, parentMetaId)
+            kidsAuthorized = true
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            errorMessage = error.message ?: "This title is unavailable in this kids profile"
+        }
+    }
     val runtime = this
     val isInPip = rememberIsInPictureInPicture()
     val displayedPositionMs = scrubbingPositionMs ?: playbackSnapshot.positionMs
@@ -170,7 +188,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             viewportHeightPx = layoutSize.height,
         )
         autoZoom = autoZoomValue
-        if (playerSurfaceSourceUrl != null) {
+        if (playerSurfaceSourceUrl != null && kidsAuthorized) {
             key(playbackKey) {
                 val active = remember { mutableStateOf(true) }
                 DisposableEffect(Unit) {

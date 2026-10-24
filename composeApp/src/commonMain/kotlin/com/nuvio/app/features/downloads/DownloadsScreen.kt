@@ -56,7 +56,7 @@ fun DownloadsScreen(
 ) {
     val uiState by remember {
         DownloadsRepository.ensureLoaded()
-        DownloadsRepository.uiState
+        DownloadsRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     LaunchedEffect(uiState.completedItems.size) {
         DownloadsRepository.markCompletedSeen()

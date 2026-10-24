@@ -11,4 +11,8 @@ actual object ProfileStorage {
     actual fun savePayload(payload: String) {
         NSUserDefaults.standardUserDefaults.setObject(payload, forKey = payloadKey)
     }
+    actual fun loadKidsToken(configId: String): String? = NSUserDefaults.standardUserDefaults.stringForKey("kids_token_$configId")
+    actual fun saveKidsToken(configId: String, token: String?) {
+        NSUserDefaults.standardUserDefaults.setObject(token, forKey = "kids_token_$configId")
+    }
 }

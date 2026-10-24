@@ -94,6 +94,8 @@ fun DetailHero(
             mutableStateOf(false)
         }
         val logoUrl = meta.logo?.takeIf { it.isNotBlank() }
+        var lastBackdrop by remember(meta.type, meta.id) { mutableStateOf<Painter?>(null) }
+        var lastLogo by remember(meta.type, meta.id) { mutableStateOf<Painter?>(null) }
 
         val heroBaseHeightPx = with(LocalDensity.current) { heroHeight.roundToPx() }
         LaunchedEffect(heroBaseHeightPx) { onHeightChanged(heroBaseHeightPx) }
@@ -115,6 +117,8 @@ fun DetailHero(
                 if (imageUrl != null) {
                     AsyncImage(
                         model = imageUrl,
+                        placeholder = lastBackdrop,
+                        error = lastBackdrop,
                         contentDescription = meta.name,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -129,6 +133,7 @@ fun DetailHero(
                         alignment = if (isTablet) Alignment.TopCenter else Alignment.Center,
                         contentScale = ContentScale.Crop,
                         onSuccess = { state ->
+                            lastBackdrop = state.painter
                             onBackdropLoaded(
                                 state.painter,
                                 loadedBackdropImageBitmap(state.result),
@@ -234,6 +239,9 @@ fun DetailHero(
                     if (logoUrl != null && !logoLoadError) {
                         AsyncImage(
                             model = logoUrl,
+                            placeholder = lastLogo,
+                            error = lastLogo,
+                            onSuccess = { lastLogo = it.painter },
                             contentDescription = stringResource(Res.string.detail_logo_content_description, meta.name),
                             modifier = Modifier
                                 .fillMaxWidth(if (isTablet) 0.56f else 0.6f)
@@ -241,7 +249,7 @@ fun DetailHero(
                                 .height(if (isTablet) 72.dp else 80.dp),
                             alignment = Alignment.Center,
                             contentScale = ContentScale.Fit,
-                            onError = { logoLoadError = true },
+                            onError = { logoLoadError = lastLogo == null },
                         )
                     } else {
                         Text(

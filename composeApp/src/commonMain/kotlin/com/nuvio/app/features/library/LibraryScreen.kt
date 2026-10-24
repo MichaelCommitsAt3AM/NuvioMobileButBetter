@@ -116,7 +116,7 @@ fun LibraryScreen(
 ) {
     val uiState by remember {
         LibraryRepository.ensureLoaded()
-        LibraryRepository.uiState
+        LibraryRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     val libraryPosterPattern by remember {
         CustomPosterUrlRepository.ensureLoaded()
@@ -126,7 +126,7 @@ fun LibraryScreen(
     val effectivePosterPattern = remember(libraryPosterPattern, libraryPosterScreens) {
         if (CustomPosterScreen.LIBRARY in libraryPosterScreens) libraryPosterPattern else ""
     }
-    val cloudUiState by CloudLibraryRepository.uiState.collectAsStateWithLifecycle()
+    val cloudUiState by CloudLibraryRepository.visibleUiState.collectAsStateWithLifecycle()
     val cloudSettings by remember {
         DebridSettingsRepository.ensureLoaded()
         DebridSettingsRepository.uiState

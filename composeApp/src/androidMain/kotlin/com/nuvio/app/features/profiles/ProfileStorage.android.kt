@@ -22,4 +22,8 @@ actual object ProfileStorage {
             ?.putString(payloadKey, payload)
             ?.apply()
     }
+    actual fun loadKidsToken(configId: String): String? = preferences?.getString("kids_token_$configId", null)
+    actual fun saveKidsToken(configId: String, token: String?) {
+        preferences?.edit()?.putString("kids_token_$configId", token)?.apply()
+    }
 }

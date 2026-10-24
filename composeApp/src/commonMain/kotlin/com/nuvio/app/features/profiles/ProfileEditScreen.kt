@@ -26,6 +26,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.nuvio.app.features.addons.*
+import com.nuvio.app.core.sync.ProfileSettingsSync
+import com.nuvio.app.features.home.HomeCatalogSettingsSyncService
+import com.nuvio.app.core.auth.isAnonymous
+import kotlinx.coroutines.CancellationException
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,15 +87,32 @@ fun ProfileEditScreen(
     }
     val fallbackColorHex = currentProfile?.avatarColorHex ?: PROFILE_COLORS.first()
 
+    var accentHex by rememberSaveable { mutableStateOf(fallbackColorHex) }
     var name by rememberSaveable { mutableStateOf(currentProfile?.name ?: "") }
     var selectedAvatarId by rememberSaveable { mutableStateOf(currentProfile?.avatarId) }
     var avatarUrl by rememberSaveable { mutableStateOf(currentProfile?.avatarUrl.orEmpty()) }
     var selectedBackgroundId by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundId) }
     var selectedBackgroundUrl by rememberSaveable { mutableStateOf(currentProfile?.profileBackgroundUrl) }
-    var usesPrimaryAddons by rememberSaveable { mutableStateOf(currentProfile?.usesPrimaryAddons ?: false) }
-    var primaryAddonsAllowlist by remember(currentProfile) { mutableStateOf(currentProfile?.primaryAddonsAllowlist) }
-    var primaryAddons by remember { mutableStateOf<List<PrimaryAddonPickerItem>>(emptyList()) }
-    var isLoadingPrimaryAddons by remember { mutableStateOf(false) }
+    var savedProfileId by rememberSaveable { mutableStateOf(profile?.profileIndex) }
+    var kidsEnabled by rememberSaveable { mutableStateOf(currentProfile?.kidsEnabled ?: false) }
+    var kidsMaxRating by rememberSaveable { mutableStateOf(currentProfile?.kidsMaxRating ?: "G") }
+    var kidsApiKey by remember { mutableStateOf("") }
+    var copyAddons by rememberSaveable { mutableStateOf(false) }
+    var addonSourceId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var addonRows by remember { mutableStateOf<List<AddonRow>>(emptyList()) }
+    var selectedUrls by remember { mutableStateOf<List<String>>(emptyList()) }
+    var addonLoadedSource by remember { mutableStateOf<Int?>(null) }
+    var addonLoading by remember { mutableStateOf(false) }
+    var addonError by remember { mutableStateOf<String?>(null) }
+    var addonRetry by remember { mutableStateOf(0) }
+    var copySettings by rememberSaveable { mutableStateOf(false) }
+    var settingsSourceId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var recommendedSubtitles by rememberSaveable { mutableStateOf(true) }
+    var subtitlesLoading by remember { mutableStateOf(!isNew) }
+    var subtitlesError by remember { mutableStateOf<String?>(null) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    val availableProfiles = profileState.profiles.filter { it.profileIndex != savedProfileId }
+    val signedIn = !AuthRepository.state.value.isAnonymous
     var isSaving by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showPinSetup by remember { mutableStateOf(false) }
@@ -98,7 +122,7 @@ fun ProfileEditScreen(
         MemberAccessRepository.access
     }.collectAsStateWithLifecycle()
     val backgroundCatalog by ProfileBackgroundRepository.catalog.collectAsStateWithLifecycle()
-    val canChooseBackground = !isNew && memberAccess.entitlements.includes(CosmeticEntitlement.PROFILE_BACKGROUNDS)
+    val canChooseBackground = memberAccess.entitlements.includes(CosmeticEntitlement.PROFILE_BACKGROUNDS)
 
     val avatars by AvatarRepository.avatars.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
@@ -112,12 +136,31 @@ fun ProfileEditScreen(
             selectedAvatarId = avatars.first().id
         }
     }
-    LaunchedEffect(usesPrimaryAddons) {
-        if (usesPrimaryAddons) {
-            isLoadingPrimaryAddons = true
-            primaryAddons = AddonRepository.fetchPrimaryAddonsForPicker()
-            isLoadingPrimaryAddons = false
-        }
+    LaunchedEffect(copyAddons, addonSourceId, addonRetry) {
+        addonRows = emptyList(); selectedUrls = emptyList(); addonError = null; addonLoadedSource = null
+        val source = addonSourceId
+        if (copyAddons && source != null) {
+            addonLoading = true
+            try {
+                AddonRepository.flushPendingPushes()
+                addonRows = withRecommendedSubtitles(AddonRepository.readProfileAddonSnapshot(source))
+                selectedUrls = addonRows.map { it.url }; addonLoadedSource = source
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                addonError = error.message ?: "Could not load add-ons"
+            } finally { addonLoading = false }
+        } else addonLoading = false
+    }
+    LaunchedEffect(profile?.profileIndex) {
+        val id = profile?.profileIndex ?: return@LaunchedEffect
+        try {
+            AddonRepository.flushPendingPushes()
+            recommendedSubtitles = withRecommendedSubtitles(AddonRepository.readProfileAddonSnapshot(id))
+                .first { it.url == RECOMMENDED_SUBTITLES_URL }.enabled
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            subtitlesError = "Could not load subtitle settings. Reopen the profile to retry."
+        } finally { subtitlesLoading = false }
     }
 
     val customAvatarUrl = remember(avatarUrl) { normalizedAvatarUrl(avatarUrl) }
@@ -126,8 +169,8 @@ fun ProfileEditScreen(
         selectedAvatarId?.let { id -> avatars.find { it.id == id } }
     }
     val visibleAvatarItem = if (customAvatarUrl == null) selectedAvatarItem else null
-    val previewAccent = remember(visibleAvatarItem, fallbackColorHex) {
-        parseHexColor(visibleAvatarItem?.bgColor ?: fallbackColorHex)
+    val previewAccent = remember(accentHex) {
+        parseHexColor(accentHex)
     }
 
     NuvioScreen(modifier = modifier) {
@@ -147,9 +190,7 @@ fun ProfileEditScreen(
                 name = name,
                 isNew = isNew,
                 profileIndex = currentProfile?.profileIndex,
-                usesPrimaryAddons = usesPrimaryAddons,
                 onNameChange = { name = it },
-                onUsesPrimaryAddonsChange = { usesPrimaryAddons = it },
                 selectedAvatar = visibleAvatarItem,
                 customAvatarUrl = customAvatarUrl,
                 accentColor = previewAccent,
@@ -157,14 +198,21 @@ fun ProfileEditScreen(
             )
         }
 
-        if (usesPrimaryAddons) {
-            item {
-                PrimaryAddonsPickerCard(
-                    allowlist = primaryAddonsAllowlist,
-                    onAllowlistChange = { primaryAddonsAllowlist = it },
-                    availableAddons = primaryAddons,
-                    isLoading = isLoadingPrimaryAddons,
-                )
+
+        item {
+            NuvioSurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Accent color", style = MaterialTheme.typography.titleMedium)
+                    PROFILE_COLORS.chunked(6).forEach { colors ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            colors.forEach { hex ->
+                                Box(Modifier.size(32.dp).clip(CircleShape).background(parseHexColor(hex))
+                                    .border(if (accentHex == hex) 3.dp else 0.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                    .clickable { accentHex = hex })
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -227,6 +275,14 @@ fun ProfileEditScreen(
                                 selectedBackgroundUrl = url
                             },
                         )
+                        NuvioInputField(
+                            value = selectedBackgroundUrl.orEmpty(),
+                            onValueChange = { selectedBackgroundUrl = it.takeIf(String::isNotBlank); selectedBackgroundId = null },
+                            placeholder = "Custom background image URL",
+                        )
+                        if (!selectedBackgroundUrl.isNullOrBlank() && !selectedBackgroundUrl!!.isValidAvatarUrl()) {
+                            Text("Use a valid http or https image URL.", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             }
@@ -297,6 +353,81 @@ fun ProfileEditScreen(
             }
         }
 
+        if (currentProfile?.profileIndex != 1) {
+            item {
+                NuvioSurfaceCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ProfileOptionRow("Kids account", "Use KidsScreen for catalogs and search, with rating checks before opening or playing titles.", kidsEnabled) { kidsEnabled = it }
+                        if (kidsEnabled) {
+                            Text("Maximum age rating", style = MaterialTheme.typography.titleMedium)
+                            listOf("G", "PG", "PG-13").forEach { rating ->
+                                PrimaryAddonsModeRow(rating, rating == kidsMaxRating) { kidsMaxRating = rating }
+                            }
+                            OutlinedTextField(
+                                value = kidsApiKey, onValueChange = { kidsApiKey = it },
+                                label = { Text("TMDB API key") }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(if (currentProfile?.kidsEnabled == true) "Key already configured. Leave blank to reuse it. On a new device, enter the key once to change the rating limit." else "Enter your personal TMDB API key. KidsScreen validates and stores it encrypted. Unrated titles are hidden.")
+                            Text("This key is used through KidsScreen for TMDB metadata enrichment. A new kids profile starts with enrichment on and cast enrichment off. Turn it off in Settings → Integrations → TMDB at any time.")
+                            if (!signedIn) Text("Sign in to set up a kids profile.", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            NuvioSurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ProfileOptionRow(if (isNew) "Copy add-ons from another profile" else "Import add-ons from another profile", "Choose add-ons to copy once. Existing add-ons keep their settings and order.", copyAddons) { copyAddons = it }
+                    if (copyAddons) {
+                        availableProfiles.forEach { source ->
+                            PrimaryAddonsModeRow(source.name, source.profileIndex == addonSourceId) { addonSourceId = source.profileIndex }
+                        }
+                        if (addonLoading) Text("Loading add-ons…")
+                        addonError?.let { message ->
+                            Text(message, color = MaterialTheme.colorScheme.error)
+                            NuvioPrimaryButton(text = "Retry", onClick = { addonRetry++ })
+                        }
+                        addonRows.filter { it.url != RECOMMENDED_SUBTITLES_URL }.forEach { row ->
+                            val blocked = kidsEnabled && isKidsConflictingAddon(row)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text((row.name ?: row.url) + if (blocked) " — unavailable for kids profiles" else "", modifier = Modifier.weight(1f))
+                                Checkbox(checked = !blocked && row.url in selectedUrls, enabled = !blocked, onCheckedChange = { checked ->
+                                    selectedUrls = if (checked) selectedUrls + row.url else selectedUrls - row.url
+                                })
+                            }
+                        }
+                        if (addonSourceId == null) Text("Select a source profile.")
+                    }
+                }
+            }
+        }
+        if (isNew && signedIn) {
+            item {
+                NuvioSurfaceCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ProfileOptionRow("Copy settings from another profile", "New profiles inherit the current profile’s preferences. Choose another source here. Credentials and add-ons are excluded; future changes stay independent.", copySettings) { copySettings = it }
+                        if (copySettings) availableProfiles.forEach { source ->
+                            PrimaryAddonsModeRow(source.name, source.profileIndex == settingsSourceId) { settingsSourceId = source.profileIndex }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            NuvioSurfaceCard {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Subtitles", style = MaterialTheme.typography.titleLarge)
+                    if (!subtitlesLoading && subtitlesError == null) {
+                        ProfileOptionRow("OpenSubtitles v3", "Recommended subtitle provider", recommendedSubtitles) { recommendedSubtitles = it }
+                    }
+                    subtitlesError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        }
+        saveError?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
+
         item {
             Spacer(modifier = Modifier.height(8.dp))
             NuvioPrimaryButton(
@@ -307,36 +438,50 @@ fun ProfileEditScreen(
                 } else {
                     stringResource(Res.string.collections_editor_save_changes)
                 },
-                enabled = name.isNotBlank() && !avatarUrlIsInvalid && !isSaving,
+                enabled = name.isNotBlank() && !avatarUrlIsInvalid && !isSaving && !subtitlesLoading &&
+                    (selectedBackgroundUrl.isNullOrBlank() || selectedBackgroundUrl!!.isValidAvatarUrl()) &&
+                    (!kidsEnabled || signedIn) &&
+                    (!copySettings || settingsSourceId != null) &&
+                    (!copyAddons || (addonSourceId != null && addonLoadedSource == addonSourceId && !addonLoading && addonError == null)),
                 onClick = {
                     isSaving = true
                     scope.launch {
-                        val avatarColorHex = visibleAvatarItem?.bgColor ?: fallbackColorHex
-                        if (isNew) {
-                            ProfileRepository.createProfile(
-                                name = name,
-                                avatarColorHex = avatarColorHex,
-                                avatarId = if (customAvatarUrl == null) selectedAvatarId else null,
-                                avatarUrl = customAvatarUrl,
-                                usesPrimaryAddons = usesPrimaryAddons,
-                                primaryAddonsAllowlist = if (usesPrimaryAddons) primaryAddonsAllowlist else null,
-                            )
-                        } else {
+                        saveError = null
+                        try {
+                            val saved = savedProfileId?.let { id -> profileState.profiles.find { it.profileIndex == id } }
+                            if (kidsEnabled && saved?.kidsEnabled != true && kidsApiKey.isBlank()) error("Enter your TMDB API key to set up this kids profile.")
+                            val id = savedProfileId ?: ProfileRepository.createProfile(
+                                name = name.trim(), avatarColorHex = accentHex,
+                                avatarId = if (customAvatarUrl == null) selectedAvatarId else null, avatarUrl = customAvatarUrl,
+                            ).also { savedProfileId = it }
                             ProfileRepository.updateProfile(
-                                profileIndex = currentProfile!!.profileIndex,
-                                name = name,
-                                avatarColorHex = avatarColorHex,
-                                avatarId = if (customAvatarUrl == null) selectedAvatarId else null,
-                                avatarUrl = customAvatarUrl,
-                                profileBackgroundId = selectedBackgroundId,
-                                profileBackgroundUrl = selectedBackgroundUrl,
-                                usesPrimaryAddons = usesPrimaryAddons,
-                                usesPrimaryPlugins = currentProfile?.usesPrimaryPlugins ?: false,
-                                primaryAddonsAllowlist = if (usesPrimaryAddons) primaryAddonsAllowlist else null,
+                                profileIndex = id, name = name.trim(), avatarColorHex = accentHex,
+                                avatarId = if (customAvatarUrl == null) selectedAvatarId else null, avatarUrl = customAvatarUrl,
+                                profileBackgroundId = selectedBackgroundId, profileBackgroundUrl = selectedBackgroundUrl,
+                                usesPrimaryPlugins = saved?.usesPrimaryPlugins ?: false,
                             )
-                        }
-                        isSaving = false
-                        onSaved()
+                            if (isNew && signedIn) {
+                                val source = if (copySettings) settingsSourceId!! else ProfileRepository.activeProfileId
+                                check(ProfileSettingsSync.seedProfileFrom(source, id)) { "Profile saved, but settings could not be copied. Retry to finish setup." }
+                                HomeCatalogSettingsSyncService.seedProfileFrom(source, id)
+                            }
+                            if (copyAddons) {
+                                ProfileRepository.setAddonProfileLink(id, null)
+                                val selected = addonRows.filter { it.url in selectedUrls && (!kidsEnabled || !isKidsConflictingAddon(it)) }
+                                AddonRepository.importProfileAddons(id, selected)
+                            }
+                            if (!subtitlesLoading && subtitlesError == null) {
+                                AddonRepository.setRecommendedSubtitles(id, recommendedSubtitles)
+                            }
+                            if (kidsEnabled || saved?.kidsEnabled == true) {
+                                KidsProfileRepository.configure(id, kidsEnabled, kidsMaxRating, kidsApiKey.trim())
+                                kidsApiKey = ""
+                            }
+                            onSaved()
+                        } catch (error: Exception) {
+                            if (error is CancellationException) throw error
+                            saveError = error.message ?: "Could not save profile. Please retry."
+                        } finally { isSaving = false }
                     }
                 },
             )
@@ -416,9 +561,7 @@ private fun ProfileIdentityCard(
     name: String,
     isNew: Boolean,
     profileIndex: Int?,
-    usesPrimaryAddons: Boolean,
     onNameChange: (String) -> Unit,
-    onUsesPrimaryAddonsChange: (Boolean) -> Unit,
     selectedAvatar: AvatarCatalogItem?,
     customAvatarUrl: String?,
     accentColor: Color,
@@ -529,12 +672,7 @@ private fun ProfileIdentityCard(
                 placeholder = stringResource(Res.string.profile_name_placeholder),
             )
 
-            ProfileOptionRow(
-                title = stringResource(Res.string.profile_use_primary_addons),
-                description = stringResource(Res.string.profile_use_primary_addons_description),
-                checked = usesPrimaryAddons,
-                onCheckedChange = onUsesPrimaryAddonsChange,
-            )
+
         }
     }
 }
@@ -579,96 +717,6 @@ private fun ProfileOptionRow(
                 uncheckedTrackColor = MaterialTheme.colorScheme.outlineVariant,
             ),
         )
-    }
-}
-
-@Composable
-private fun PrimaryAddonsPickerCard(
-    allowlist: List<String>?,
-    onAllowlistChange: (List<String>?) -> Unit,
-    availableAddons: List<PrimaryAddonPickerItem>,
-    isLoading: Boolean,
-) {
-    NuvioSurfaceCard {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(
-                text = stringResource(Res.string.profile_shared_addons_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = stringResource(Res.string.profile_shared_addons_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            PrimaryAddonsModeRow(
-                label = stringResource(Res.string.profile_shared_addons_share_all),
-                selected = allowlist == null,
-                onClick = { onAllowlistChange(null) },
-            )
-            PrimaryAddonsModeRow(
-                label = stringResource(Res.string.profile_shared_addons_choose_specific),
-                selected = allowlist != null,
-                onClick = { onAllowlistChange(allowlist ?: emptyList()) },
-            )
-
-            if (allowlist != null) {
-                when {
-                    isLoading -> Text(
-                        text = stringResource(Res.string.profile_shared_addons_loading),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    availableAddons.isEmpty() -> Text(
-                        text = stringResource(Res.string.profile_shared_addons_none_available),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    else -> {
-                        if (allowlist.isEmpty()) {
-                            Text(
-                                text = stringResource(Res.string.profile_shared_addons_none_selected_hint),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                        Column {
-                            availableAddons.forEach { addon ->
-                                val checked = addon.manifestUrl in allowlist
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onAllowlistChange(
-                                                if (checked) allowlist - addon.manifestUrl else allowlist + addon.manifestUrl,
-                                            )
-                                        }
-                                        .padding(vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(
-                                        text = addon.displayName,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Checkbox(
-                                        checked = checked,
-                                        onCheckedChange = {
-                                            onAllowlistChange(
-                                                if (checked) allowlist - addon.manifestUrl else allowlist + addon.manifestUrl,
-                                            )
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

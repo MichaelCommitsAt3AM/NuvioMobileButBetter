@@ -296,7 +296,7 @@ internal fun MainAppContent(
         }.collectAsStateWithLifecycle()
         val libraryUiState by remember {
             LibraryRepository.ensureLoaded()
-            LibraryRepository.uiState
+            LibraryRepository.visibleUiState
         }.collectAsStateWithLifecycle()
         val authState by AuthRepository.state.collectAsStateWithLifecycle()
         val openPosterActions: (PosterActionTarget) -> Unit = { target ->
@@ -331,7 +331,7 @@ internal fun MainAppContent(
     val fullyWatchedSeriesKeys by WatchedRepository.fullyWatchedSeriesKeys.collectAsStateWithLifecycle()
     val downloadsUiState by remember {
         DownloadsRepository.ensureLoaded()
-        DownloadsRepository.uiState
+        DownloadsRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     val networkStatusUiState by remember {
         NetworkStatusRepository.uiState

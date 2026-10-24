@@ -1,5 +1,8 @@
 package com.nuvio.app.features.streams
 
+import com.nuvio.app.features.profiles.KidsProfileRepository
+import kotlinx.coroutines.CancellationException
+import com.nuvio.app.features.profiles.forKidsCatalogs
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.features.addons.AddonRepository
@@ -77,6 +80,24 @@ object StreamsRepository {
     }
 
     private fun load(type: String, videoId: String, parentMetaId: String?, season: Int?, episode: Int?, manualSelection: Boolean, contentTitle: String?, forceRefresh: Boolean) {
+        if (KidsProfileRepository.active == null) {
+            loadApproved(type, videoId, parentMetaId, season, episode, manualSelection, contentTitle, forceRefresh)
+            return
+        }
+        activeJob?.cancel()
+        _uiState.value = StreamsUiState()
+        activeJob = scope.launch {
+            try {
+                KidsProfileRepository.requireMedia(type, parentMetaId ?: videoId)
+                loadApproved(type, videoId, parentMetaId, season, episode, manualSelection, contentTitle, forceRefresh)
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                _uiState.value = StreamsUiState(emptyStateReason = StreamsEmptyStateReason.StreamFetchFailed, overlayMessage = error.message)
+            }
+        }
+    }
+
+    private fun loadApproved(type: String, videoId: String, parentMetaId: String?, season: Int?, episode: Int?, manualSelection: Boolean, contentTitle: String?, forceRefresh: Boolean) {
         val pluginUiState = if (AppFeaturePolicy.pluginsEnabled) {
             PluginRepository.initialize()
             PluginRepository.uiState.value

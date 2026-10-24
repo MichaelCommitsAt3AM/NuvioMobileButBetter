@@ -193,7 +193,7 @@ fun MetaDetailsScreen(
         if (active && shuffleWasInactive) shuffleVisit += 1
         shuffleWasInactive = !active
     }
-    val uiState by MetaDetailsRepository.uiState.collectAsStateWithLifecycle()
+    val uiState by MetaDetailsRepository.visibleUiState.collectAsStateWithLifecycle()
     val displayedMeta = uiState.meta?.takeIf { it.type == type && it.id == id }
         ?: MetaDetailsRepository.peek(type, id)
     val metaScreenSettingsUiState by remember {
@@ -218,7 +218,7 @@ fun MetaDetailsScreen(
     }.collectAsStateWithLifecycle()
     val libraryUiState by remember {
         LibraryRepository.ensureLoaded()
-        LibraryRepository.uiState
+        LibraryRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     val watchedUiState by remember {
         WatchedRepository.ensureLoaded()
@@ -227,7 +227,7 @@ fun MetaDetailsScreen(
     val fullyWatchedSeriesKeys by WatchedRepository.fullyWatchedSeriesKeys.collectAsStateWithLifecycle()
     val watchProgressUiState by remember {
         WatchProgressRepository.ensureLoaded()
-        WatchProgressRepository.uiState
+        WatchProgressRepository.visibleUiState
     }.collectAsStateWithLifecycle()
     val progressByVideoId = remember(watchProgressUiState.entries, id) {
         watchProgressUiState.byVideoIdForContent(id)
@@ -400,8 +400,6 @@ fun MetaDetailsScreen(
     LaunchedEffect(
         type,
         id,
-        displayedMeta?.id,
-        uiState.isLoading,
         trackingSettingsUiState.moreLikeThisSource,
         traktAuthUiState.mode,
         tmdbSettingsUiState.enabled,
@@ -453,6 +451,9 @@ fun MetaDetailsScreen(
                 )
                 .background(MaterialTheme.colorScheme.background),
         ) {
+            // Hoisted so progressive TMDB enrichment (which replaces the meta object)
+            // cannot recreate the list state and jump the page back to the top.
+            val listState = rememberLazyListState()
             when {
             displayedMeta == null && uiState.isLoading -> {
                 NuvioLoadingIndicator(
@@ -984,7 +985,6 @@ fun MetaDetailsScreen(
                         },
                     )
                 }
-                val listState = rememberLazyListState()
                 val heroStretchState = rememberHeroStretchState(listState)
                 val density = LocalDensity.current
                 val safeAreaTopPx = with(density) {
@@ -1034,10 +1034,10 @@ fun MetaDetailsScreen(
                     val dominantColorEnabled = backgroundMode == MetaScreenBackgroundMode.DominantColor &&
                         deferredMetaWorkAllowed &&
                         !backdropUrl.isNullOrBlank()
-                    var dominantBackdropPainter by remember(meta.id, backdropUrl) {
+                    var dominantBackdropPainter by remember(meta.type, meta.id) {
                         mutableStateOf<Painter?>(null)
                     }
-                    var dominantBackdropImageBitmap by remember(meta.id, backdropUrl) {
+                    var dominantBackdropImageBitmap by remember(meta.type, meta.id) {
                         mutableStateOf<ImageBitmap?>(null)
                     }
                     val dominantImageBitmapColorState = rememberDominantColorState(
@@ -1127,6 +1127,8 @@ fun MetaDetailsScreen(
                                 MetaScreenBackgroundMode.Cinematic -> if (deferredMetaWorkAllowed && backdropUrl != null) {
                                     AsyncImage(
                                         model = backdropUrl,
+                                        placeholder = dominantBackdropPainter,
+                                        error = dominantBackdropPainter,
                                         contentDescription = null,
                                         modifier = Modifier
                                             .fillMaxSize()
