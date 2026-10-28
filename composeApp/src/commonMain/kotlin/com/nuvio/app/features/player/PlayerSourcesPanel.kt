@@ -31,6 +31,8 @@ fun PlayerSourcesPanel(
     currentEpisodeTitle: String?,
     currentStreamUrl: String?,
     currentStreamName: String?,
+    currentSourceIdentityKey: String?,
+    currentTorrentInfoHash: String?,
     onFilterSelected: (String?) -> Unit,
     onStreamSelected: (StreamItem) -> Unit,
     onReload: () -> Unit,
@@ -95,6 +97,8 @@ fun PlayerSourcesPanel(
                 modifier = Modifier.weight(1f),
                 currentStreamUrl = currentStreamUrl,
                 currentStreamName = currentStreamName,
+                currentSourceIdentityKey = currentSourceIdentityKey,
+                currentTorrentInfoHash = currentTorrentInfoHash,
                 currentLabel = stringResource(Res.string.compose_player_playing),
             )
         }
@@ -118,8 +122,16 @@ internal fun List<StreamItem>.stablePlayerKeys(): List<String> {
 internal fun StreamItem.isCurrentPlayerStream(
     currentUrl: String?,
     currentName: String?,
+    currentSourceIdentityKey: String?,
+    currentTorrentInfoHash: String?,
 ): Boolean {
+    val activeKey = currentSourceIdentityKey
+    if (activeKey != null) return playerSourceIdentityKey() == activeKey
     if (!currentUrl.isNullOrBlank() && playableDirectUrl == currentUrl) return true
-    return !currentName.isNullOrBlank() && streamLabel.equals(currentName, ignoreCase = true) &&
+    if (!currentName.isNullOrBlank() && streamLabel.equals(currentName, ignoreCase = true) &&
         playableDirectUrl == currentUrl
+    ) return true
+    val infoHash = p2pInfoHash
+    if (infoHash != null && infoHash == currentTorrentInfoHash) return true
+    return false
 }
