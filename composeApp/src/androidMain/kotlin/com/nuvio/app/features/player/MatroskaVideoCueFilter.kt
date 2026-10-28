@@ -11,8 +11,8 @@ import androidx.media3.extractor.mkv.EbmlProcessor
 import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
-import io.github.peerless2012.ass.media.AssHandler
-import io.github.peerless2012.ass.media.extractor.AssMatroskaExtractor
+import com.nuvio.tv.libass.media.AssHandler
+import com.nuvio.tv.libass.media.extractor.AssMatroskaExtractor
 
 private const val TAG = "NuvioPlayerDiag"
 

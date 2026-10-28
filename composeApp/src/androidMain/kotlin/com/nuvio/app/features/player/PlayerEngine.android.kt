@@ -81,7 +81,7 @@ import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.MPV
 import `is`.xyz.mpv.MPVNode
 import `is`.xyz.mpv.Utils
-import io.github.peerless2012.ass.media.widget.AssSubtitleView
+import com.nuvio.tv.libass.media.widget.AssSubtitleSurfaceView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -525,9 +525,17 @@ private fun ExoPlayerSurface(
             .setLoadControl(loadControl)
 
         val player = if (useLibass) {
+            // Set render scale before building the player
+            val scaleValue = when (playerSettings.libassRenderScale) {
+                "THREE_QUARTER" -> 0.75f
+                "HALF" -> 0.5f
+                "THIRD" -> 0.33f
+                "QUARTER" -> 0.25f
+                else -> 1.0f
+            }
+            com.nuvio.tv.libass.media.AssHandler.setRenderScale(scaleValue)
             playerBuilder.buildWithAssSupportCompat(
                 context = context,
-                renderType = libassRenderType.toAssRenderType(),
                 dataSourceFactory = dataSourceFactory,
                 extractorsFactory = extractorsFactory,
                 renderersFactory = renderersFactory
@@ -928,6 +936,8 @@ private fun ExoPlayerSurface(
         dispatchExoPlayerSnapshot()
     }
 
+    val latestChapterSourceUrl = rememberUpdatedState(sourceUrl)
+    val latestChapterSourceHeaders = rememberUpdatedState(sanitizedSourceHeaders)
     LaunchedEffect(exoPlayer) {
         onControllerReady(
             autoSyncCoordinator.wrap(object : PlayerEngineController { // AutoSync hook
@@ -935,6 +945,12 @@ private fun ExoPlayerSurface(
 
                 override fun play() {
                     startPlayback()
+                }
+
+                // Media3's Matroska extractor skips chapters; read them from the file, if allowed.
+                override suspend fun getChapters(): List<PlayerChapter> {
+                    if (!PlayerSettingsRepository.uiState.value.androidExoChaptersEnabled) return emptyList()
+                    return MatroskaChapterLoader.load(latestChapterSourceUrl.value, latestChapterSourceHeaders.value)
                 }
 
                 override fun pause() {
@@ -1715,6 +1731,24 @@ private class NuvioLibmpvView(
         }
     }
 
+    /** mpv lists the chapters of the loaded file itself. */
+    suspend fun readChapters(): List<PlayerChapter> {
+        if (released.get()) return emptyList()
+        return runCatching {
+            withContext(mpvDispatcher) {
+                if (released.get()) return@withContext emptyList()
+                val count = mpv.getPropertyInt("chapter-list/count") ?: 0
+                (0 until count).mapNotNull { i ->
+                    val seconds = mpv.getPropertyDouble("chapter-list/$i/time") ?: return@mapNotNull null
+                    PlayerChapter(
+                        startMs = (seconds * 1000.0).toLong(),
+                        title = mpv.getPropertyString("chapter-list/$i/title")?.trim()?.takeIf { it.isNotBlank() },
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
     suspend fun snapshot(): PlayerPlaybackSnapshot {
         if (released.get()) return latestSnapshot
         return withContext(mpvDispatcher) {
@@ -1828,6 +1862,7 @@ private class NuvioLibmpvView(
 
             override fun seekBy(offsetMs: Long, precision: PlayerSeekPrecision) =
                 this@NuvioLibmpvView.seekByMs(offsetMs, precision)
+            override suspend fun getChapters(): List<PlayerChapter> = this@NuvioLibmpvView.readChapters()
 
             override fun retry() {
                 executeMpv { loadCurrentSourceNow(playWhenReady = true) }
@@ -2345,7 +2380,7 @@ private fun PlayerView.syncLibassOverlay(
         R.id.libass_overlay_container
     }
     val overlayContainer = findViewById<android.widget.FrameLayout>(containerId) ?: return
-    val needsOverlay = enabled && renderType.usesOverlaySubtitleView()
+    val needsOverlay = enabled
     val boundPlayer = getTag(R.id.libass_overlay_bound_player) as? ExoPlayer
     val hasOverlayChild = overlayContainer.hasAssOverlayChild()
 
@@ -2354,6 +2389,7 @@ private fun PlayerView.syncLibassOverlay(
             overlayContainer.removeAssOverlayChildren()
         }
         if (boundPlayer != null) {
+            boundPlayer.getAssHandlerCompat()?.videoFrameCallback = null
             setTag(R.id.libass_overlay_bound_player, null)
         }
         return
@@ -2365,7 +2401,14 @@ private fun PlayerView.syncLibassOverlay(
     }
 
     overlayContainer.removeAssOverlayChildren()
-    val assSubtitleView = AssSubtitleView(overlayContainer.context, assHandler)
+    val assSubtitleView = AssSubtitleSurfaceView(overlayContainer.context, assHandler)
+    // Wire video frame callback to drive subtitle rendering.
+    // The primary path (VideoFrameMetadataListener) provides vsync-pinned timing.
+    // When it doesn't fire (tunneled playback), AssPositionRenderer in the
+    // RenderersFactory provides position-based fallback on every render loop.
+    assHandler.videoFrameCallback = { presentationTimeUs, releaseTimeNs ->
+        assSubtitleView.requestRender(presentationTimeUs, releaseTimeNs)
+    }
     overlayContainer.addView(
         assSubtitleView,
         android.widget.FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
@@ -2373,12 +2416,10 @@ private fun PlayerView.syncLibassOverlay(
     setTag(R.id.libass_overlay_bound_player, player)
 }
 
-private fun LibassRenderType.usesOverlaySubtitleView(): Boolean =
-    this == LibassRenderType.OVERLAY_CANVAS || this == LibassRenderType.OVERLAY_OPEN_GL
 
 private fun android.widget.FrameLayout.hasAssOverlayChild(): Boolean {
     for (index in 0 until childCount) {
-        if (getChildAt(index) is AssSubtitleView) {
+        if (getChildAt(index) is AssSubtitleSurfaceView) {
             return true
         }
     }
@@ -2387,7 +2428,7 @@ private fun android.widget.FrameLayout.hasAssOverlayChild(): Boolean {
 
 private fun android.widget.FrameLayout.removeAssOverlayChildren() {
     for (index in childCount - 1 downTo 0) {
-        if (getChildAt(index) is AssSubtitleView) {
+        if (getChildAt(index) is AssSubtitleSurfaceView) {
             removeViewAt(index)
         }
     }
