@@ -60,6 +60,7 @@ import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.debrid.DebridSettings
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.debrid.DebridSettingsStorage
+import com.nuvio.app.features.debrid.formatDebridSizeGb
 import com.nuvio.app.features.debrid.DebridStreamFormatterDefaults
 import com.nuvio.app.features.debrid.DebridStreamAudioChannel
 import com.nuvio.app.features.debrid.DebridStreamAudioTag
@@ -157,9 +158,9 @@ import nuvio.composeapp.generated.resources.settings_debrid_selection_any
 import nuvio.composeapp.generated.resources.settings_debrid_selection_count
 import nuvio.composeapp.generated.resources.settings_debrid_results_all
 import nuvio.composeapp.generated.resources.settings_debrid_results_count
-import nuvio.composeapp.generated.resources.settings_debrid_size_up_to
-import nuvio.composeapp.generated.resources.settings_debrid_size_min
-import nuvio.composeapp.generated.resources.settings_debrid_size_range_value
+import nuvio.composeapp.generated.resources.settings_debrid_size_up_to_label
+import nuvio.composeapp.generated.resources.settings_debrid_size_min_label
+import nuvio.composeapp.generated.resources.settings_debrid_size_range_label
 import nuvio.composeapp.generated.resources.settings_debrid_rule_preferred_resolutions
 import nuvio.composeapp.generated.resources.settings_debrid_rule_preferred_resolutions_desc
 import nuvio.composeapp.generated.resources.settings_debrid_rule_required_resolutions
@@ -790,12 +791,10 @@ private fun DebridStreamPreferenceDialog(
             onSelected = { value -> onPreferencesChanged(preferences.copy(sortCriteria = sortCriteriaForProfile(value))) },
             onDismiss = onDismiss,
         )
-        DebridStreamPicker.SIZE_RANGE -> DebridSingleChoiceDialog(
-            title = stringResource(Res.string.settings_debrid_size_range),
-            selectedValue = preferences.sizeMinGb to preferences.sizeMaxGb,
-            options = listOf(0 to 0, 0 to 5, 0 to 10, 5 to 20, 10 to 50, 20 to 100),
-            label = { sizeRangeLabel(it.first, it.second) },
-            onSelected = { value -> onPreferencesChanged(preferences.copy(sizeMinGb = value.first, sizeMaxGb = value.second)) },
+        DebridStreamPicker.SIZE_RANGE -> DebridSizeRangeDialog(
+            minGb = preferences.sizeMinGb,
+            maxGb = preferences.sizeMaxGb,
+            onSave = { min, max -> onPreferencesChanged(preferences.copy(sizeMinGb = min, sizeMaxGb = max)) },
             onDismiss = onDismiss,
         )
         DebridStreamPicker.PREFERRED_RESOLUTIONS -> DebridMultiChoiceDialog(
@@ -1202,12 +1201,12 @@ private fun sizeRangeLabel(preferences: DebridStreamPreferences): String =
     sizeRangeLabel(preferences.sizeMinGb, preferences.sizeMaxGb)
 
 @Composable
-private fun sizeRangeLabel(minGb: Int, maxGb: Int): String =
+private fun sizeRangeLabel(minGb: Double, maxGb: Double): String =
     when {
         minGb <= 0 && maxGb <= 0 -> stringResource(Res.string.settings_debrid_selection_any)
-        minGb <= 0 -> stringResource(Res.string.settings_debrid_size_up_to, maxGb)
-        maxGb <= 0 -> stringResource(Res.string.settings_debrid_size_min, minGb)
-        else -> stringResource(Res.string.settings_debrid_size_range_value, minGb, maxGb)
+        minGb <= 0 -> stringResource(Res.string.settings_debrid_size_up_to_label, formatDebridSizeGb(maxGb))
+        maxGb <= 0 -> stringResource(Res.string.settings_debrid_size_min_label, formatDebridSizeGb(minGb))
+        else -> stringResource(Res.string.settings_debrid_size_range_label, formatDebridSizeGb(minGb), formatDebridSizeGb(maxGb))
     }
 
 private fun sortProfileFor(criteria: List<DebridStreamSortCriterion>): DebridSortProfile {

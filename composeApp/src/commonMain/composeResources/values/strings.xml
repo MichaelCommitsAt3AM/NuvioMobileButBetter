@@ -2095,6 +2095,15 @@
     <string name="settings_debrid_per_quality_limit_desc">Cap repeated BluRay, WEB-DL, REMUX results after sorting.</string>
     <string name="settings_debrid_size_range">Size range</string>
     <string name="settings_debrid_size_range_desc">Filter results by file size.</string>
+    <string name="settings_debrid_size_minimum">Minimum size</string>
+    <string name="settings_debrid_size_maximum">Maximum size</string>
+    <string name="settings_debrid_size_custom">Custom…</string>
+    <string name="settings_debrid_size_custom_hint">Size in GB</string>
+    <string name="settings_debrid_size_invalid">Enter a size greater than 0 GB.</string>
+    <string name="settings_debrid_size_inverted">Maximum size must be at least the minimum size.</string>
+    <string name="settings_debrid_size_up_to_label">Up to %1$s</string>
+    <string name="settings_debrid_size_min_label">%1$s+</string>
+    <string name="settings_debrid_size_range_label">%1$s – %2$s</string>
     <!-- Debrid misc -->
     <string name="settings_debrid_learn_more">Learn more</string>
     <string name="settings_debrid_template_default_format">Default format</string>

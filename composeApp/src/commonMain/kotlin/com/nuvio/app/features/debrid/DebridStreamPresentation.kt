@@ -560,4 +560,4 @@ internal data class DebridStreamFacts(
     val languageRank: Int,
 )
 
-private fun Int.gigabytes(): Long = this * 1_000_000_000L
+private fun Double.gigabytes(): Long = (this * 1_000_000_000.0).toLong()

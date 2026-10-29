@@ -22,6 +22,8 @@
 
 Title details appear immediately from the add-on and update in place when TMDB enrichment finishes, with core metadata loading before series episode enrichment.
 
+Integrations → Size range offers separate minimum and maximum file sizes, with Any, 500 MB through 100 GB presets, and custom decimal GB values. Clear resets the draft; Save applies the filter. Existing whole-GB ranges remain supported.
+
 New kids profiles start with cast enrichment off and enable TMDB metadata enrichment using the same API key entered during KidsScreen setup. The key stays in that profile’s local credentials. Turn enrichment off at any time in Settings → Integrations → TMDB.
 
 - Kids profiles use KidsScreen catalogs and search with G, PG or PG-13 limits. Nuvio verifies titles before showing them in catalogs, saved libraries, recommendations, downloads and Continue Watching, and before opening details or playing media. Unverifiable titles stay hidden.

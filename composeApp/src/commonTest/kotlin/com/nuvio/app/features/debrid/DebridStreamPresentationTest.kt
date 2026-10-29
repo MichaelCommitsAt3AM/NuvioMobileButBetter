@@ -17,6 +17,21 @@ import kotlin.test.assertFalse
 
 class DebridStreamPresentationTest {
     @Test
+    fun `fractional file size bounds include exact endpoints and preserve unknown sizes`() {
+        val sizes = listOf(499_999_999L, 500_000_000L, 1_250_000_000L, 1_250_000_001L)
+        val streams = sizes.map { size -> localTorboxStream(name = size.toString(), filename = "Movie.mkv", size = size) }
+        val unknown = StreamItem(name = "Unknown size", url = "https://example.test/video", addonName = "Addon", addonId = "addon:test")
+        val settings = DebridSettings(streamPreferences = DebridStreamPreferences(sizeMinGb = 0.5, sizeMaxGb = 1.25))
+        val filtered = DebridStreamPresentation.applyPreferences(streams + unknown, settings)
+        assertEquals(setOf("500000000", "1250000000", "Unknown size"), filtered.map { it.name }.toSet())
+        val cleared = settings.copy(streamPreferences = settings.streamPreferences.copy(sizeMinGb = 0.0, sizeMaxGb = 0.0))
+        assertEquals(5, DebridStreamPresentation.applyPreferences(streams + unknown, cleared).size)
+        val maxOnly = settings.copy(streamPreferences = settings.streamPreferences.copy(sizeMinGb = 0.0))
+        assertEquals(4, DebridStreamPresentation.applyPreferences(streams + unknown, maxOnly).size)
+        val minOnly = settings.copy(streamPreferences = settings.streamPreferences.copy(sizeMaxGb = 0.0))
+        assertEquals(4, DebridStreamPresentation.applyPreferences(streams + unknown, minOnly).size)
+    }
+    @Test
     fun `formats cached addon torrent streams with custom templates`() {
         val stream = localTorboxStream(
             filename = "Lost.S01E01.2160p.WEB-DL.H265.AAC-NAKSU.mkv",

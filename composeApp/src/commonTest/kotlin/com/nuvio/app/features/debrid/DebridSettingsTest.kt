@@ -4,8 +4,36 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertNull
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.intOrNull
 
 class DebridSettingsTest {
+    @Test
+    fun `size bounds preserve legacy integers and custom fractional values`() {
+        val legacy = Json.decodeFromString<DebridStreamPreferences>("""{"sizeMinGb":5,"sizeMaxGb":20}""")
+        assertEquals(5.0, legacy.sizeMinGb)
+        assertEquals(20.0, legacy.sizeMaxGb)
+        val encodedLegacy = Json.parseToJsonElement(Json.encodeToString(legacy)).jsonObject
+        assertEquals(5, encodedLegacy.getValue("sizeMinGb").jsonPrimitive.intOrNull)
+        val fractional = legacy.copy(sizeMinGb = 0.5, sizeMaxGb = 150.25).normalized()
+        assertEquals(fractional, Json.decodeFromString<DebridStreamPreferences>(Json.encodeToString(fractional)))
+        assertEquals(150.25, fractional.sizeMaxGb)
+        assertEquals(0.0, normalizeDebridSizeGb(Double.NaN))
+        assertEquals(0.0, normalizeDebridSizeGb(-1.0))
+    }
+
+    @Test
+    fun `custom size accepts decimal separators but rejects blank invalid and nonpositive values`() {
+        assertEquals(0.5, parseDebridSizeGb("0.5"))
+        assertEquals(1.25, parseDebridSizeGb(" 1,25 "))
+        for (text in listOf("", " ", "0", "-2", "NaN", "Infinity", "1.2.3", "1e100")) assertNull(parseDebridSizeGb(text))
+        assertEquals("500 MB", formatDebridSizeGb(0.5))
+        assertEquals("1.25 GB", formatDebridSizeGb(1.25))
+    }
     @Test
     fun `normalizes provider ids when reading api keys`() {
         val settings = DebridSettings(
