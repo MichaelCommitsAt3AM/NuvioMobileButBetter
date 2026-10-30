@@ -324,6 +324,12 @@ internal fun LazyListScope.debridSettingsContent(
                             }
                         },
                     )
+                    if (settings.apiKeyFor(provider.id).isNotBlank()) {
+                        SettingsSavedCredentialCard(
+                            onReplace = { activeApiKeyProviderId = provider.id },
+                            modifier = Modifier.padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
         }

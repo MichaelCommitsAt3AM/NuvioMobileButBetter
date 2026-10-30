@@ -1325,15 +1325,15 @@ private fun PlaybackSettingsSection(
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setAnimeSkipEnabled,
                 )
-                if (autoPlayPlayerSettings.animeSkipEnabled) {
+                if (autoPlayPlayerSettings.animeSkipEnabled || autoPlayPlayerSettings.animeSkipClientId.isNotBlank()) {
                     SettingsGroupDivider(isTablet = isTablet)
                     var showAnimeSkipClientIdDialog by remember { mutableStateOf(false) }
                     val notSetLabel = stringResource(Res.string.settings_playback_not_set)
-                    SettingsNavigationRow(
+                    SettingsCredentialRow(
                         title = stringResource(Res.string.settings_playback_anime_skip_client_id),
-                        description = autoPlayPlayerSettings.animeSkipClientId.ifBlank { notSetLabel },
+                        value = autoPlayPlayerSettings.animeSkipClientId,
                         isTablet = isTablet,
-                        onClick = { showAnimeSkipClientIdDialog = true },
+                        onReplace = { showAnimeSkipClientIdDialog = true },
                     )
                     if (showAnimeSkipClientIdDialog) {
                         AnimeSkipClientIdDialog(
@@ -1354,15 +1354,15 @@ private fun PlaybackSettingsSection(
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setIntroSubmitEnabled,
                 )
-                if (autoPlayPlayerSettings.introSubmitEnabled) {
+                if (autoPlayPlayerSettings.introSubmitEnabled || autoPlayPlayerSettings.introDbApiKey.isNotBlank()) {
                     SettingsGroupDivider(isTablet = isTablet)
                     var showIntroDbApiKeyDialog by remember { mutableStateOf(false) }
                     val notSetLabel = stringResource(Res.string.settings_playback_not_set)
-                    SettingsNavigationRow(
+                    SettingsCredentialRow(
                         title = stringResource(Res.string.settings_playback_introdb_api_key),
-                        description = autoPlayPlayerSettings.introDbApiKey.ifBlank { notSetLabel },
+                        value = autoPlayPlayerSettings.introDbApiKey,
                         isTablet = isTablet,
-                        onClick = { showIntroDbApiKeyDialog = true },
+                        onReplace = { showIntroDbApiKeyDialog = true },
                     )
                     if (showIntroDbApiKeyDialog) {
                         IntroDbApiKeyDialog(

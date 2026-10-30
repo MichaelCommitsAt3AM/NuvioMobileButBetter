@@ -20,6 +20,8 @@
 
 ## Profile features in this fork
 
+Saved TMDB, MDBList, debrid, AnimeSkip and IntroDB credentials show a “Key saved” card. Use Replace key to edit, Cancel to keep the saved credential, or Clear where available to remove it. Saved-key status stays visible even when its playback integration is turned off.
+
 Title details appear immediately from the add-on and update in place when TMDB enrichment finishes, with core metadata loading before series episode enrichment.
 
 Integrations → Size range offers separate minimum and maximum file sizes, with Any, 500 MB through 100 GB presets, and custom decimal GB values. Clear resets the draft; Save applies the filter. Existing whole-GB ranges remain supported.

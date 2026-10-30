@@ -219,44 +219,12 @@ private fun TmdbApiKeyRow(
     value: String,
     onApiKeyCommitted: (String) -> Unit,
 ) {
-    var draft by rememberSaveable(value) { mutableStateOf(value) }
-    val normalizedDraft = draft.trim()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = if (isTablet) 16.dp else 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = stringResource(Res.string.settings_tmdb_personal_api_key),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = stringResource(Res.string.settings_tmdb_api_key_override_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        SettingsSecretTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = stringResource(Res.string.settings_tmdb_api_key_label),
-        )
-        Button(
-            onClick = {
-                draft = normalizedDraft
-                onApiKeyCommitted(normalizedDraft)
-            },
-            enabled = normalizedDraft != value,
-        ) {
-            Text(stringResource(Res.string.action_save))
-        }
-    }
+    SettingsApiKeyEditor(
+        title = stringResource(Res.string.settings_tmdb_personal_api_key),
+        description = stringResource(Res.string.settings_tmdb_api_key_override_description),
+        label = stringResource(Res.string.settings_tmdb_api_key_label),
+        value = value, isTablet = isTablet, onCommit = onApiKeyCommitted,
+    )
 }
 
 @Composable
