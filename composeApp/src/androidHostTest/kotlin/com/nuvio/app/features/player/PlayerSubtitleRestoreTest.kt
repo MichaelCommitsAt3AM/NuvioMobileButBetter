@@ -177,6 +177,38 @@ class PlayerSubtitleRestoreTest {
         assertTrue(runtime.isUserExplicitSubtitleSelection)
     }
 
+    @Test
+    fun lateEnglishTrackReplacesAutomaticGermanSelection() {
+        val runtime = runtime()
+        val controller = RecordingController().apply {
+            tracks = listOf(
+                SubtitleTrack(index = 0, id = "de", label = "German", language = "de", isSelected = true),
+                SubtitleTrack(index = 1, id = "en", label = "English", language = "en"),
+            )
+        }
+        runtime.playerController = controller
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(isLoading = false)
+        runtime.trackPreferenceRestoreApplied = true
+        runtime.preferredSubtitleSelectionApplied = true
+        runtime.selectedSubtitleIndex = 0
+        runtime.refreshTracks()
+        assertEquals(1, runtime.selectedSubtitleIndex)
+        assertEquals(listOf(1), controller.subtitleSelections)
+    }
+
+    @Test
+    fun lateEnglishAddonReplacesAutomaticNone() {
+        val runtime = runtime()
+        val controller = RecordingController()
+        runtime.playerController = controller
+        runtime.playbackSnapshot = PlayerPlaybackSnapshot(isLoading = false)
+        runtime.trackPreferenceRestoreApplied = true
+        runtime.preferredSubtitleSelectionApplied = true
+        runtime.addonSubtitles = listOf(episodeOneSubtitle)
+        runtime.refreshTracks()
+        assertEquals(listOf(episodeOneSubtitle.url), controller.subtitleUrls)
+    }
+
     private fun advanceToEpisodeTwo(runtime: PlayerScreenRuntime): RecordingController {
         runtime.switchToEpisodeStream(
             StreamItem(url = "https://example.com/episode-2.mp4", addonName = "Test", addonId = "test"),
@@ -247,6 +279,7 @@ class PlayerSubtitleRestoreTest {
     private class RecordingController : PlayerEngineController {
         val subtitleUrls = mutableListOf<String>()
         val subtitleSelections = mutableListOf<Int>()
+        var tracks = emptyList<SubtitleTrack>()
 
         override fun setSubtitleUri(url: String) {
             subtitleUrls += url
@@ -257,7 +290,7 @@ class PlayerSubtitleRestoreTest {
         }
 
         override fun getAudioTracks() = emptyList<AudioTrack>()
-        override fun getSubtitleTracks() = emptyList<SubtitleTrack>()
+        override fun getSubtitleTracks() = tracks
         override fun play() = Unit
         override fun pause() = Unit
         override fun seekTo(positionMs: Long) = Unit
