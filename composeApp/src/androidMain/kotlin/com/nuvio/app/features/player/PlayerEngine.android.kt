@@ -147,6 +147,8 @@ actual fun PlatformPlayerSurface(
         mutableStateOf(requestedEngine.initialAndroidEngine())
     }
 
+    var exoCapabilityError by remember(playerSourceKey, requestedEngine) { mutableStateOf<String?>(null) }
+
     when (activeEngine) {
         ResolvedAndroidPlaybackEngine.ExoPlayer -> ExoPlayerSurface(
             sourceUrl = sourceUrl,
@@ -169,6 +171,7 @@ actual fun PlatformPlayerSurface(
             onSnapshot = onSnapshot,
             onError = { message ->
                 if (message != null && requestedEngine == AndroidPlaybackEngine.Auto) {
+                    exoCapabilityError = message.takeIf { it.contains("NO_EXCEEDS_CAPABILITIES") }
                     Log.w(TAG, "ExoPlayer failed; falling back to libmpv: $message")
                     initialPositionRequestKey?.let { key ->
                         onInitialPositionHandled(key, false)
@@ -200,7 +203,7 @@ actual fun PlatformPlayerSurface(
                 preferredSubtitleLanguage = playerSettings.preferredSubtitleLanguage,
                 onControllerReady = onControllerReady,
                 onSnapshot = onSnapshot,
-                onError = onError,
+                onError = { message -> onError(if (message != null) exoCapabilityError ?: message else null) },
             )
         }
     }

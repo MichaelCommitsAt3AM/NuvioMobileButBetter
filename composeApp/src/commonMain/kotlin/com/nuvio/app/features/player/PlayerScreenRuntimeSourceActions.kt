@@ -21,6 +21,8 @@ import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.youtube_resolution_failed
 import org.jetbrains.compose.resources.getString
@@ -640,4 +642,49 @@ private fun PlayerScreenRuntime.saveDirectStreamForReuse(
         streamType = stream.streamType,
         contentLanguage = contentLanguage,
     )
+}
+
+/** Try at most three distinct streams when the device cannot decode the video. */
+internal fun PlayerScreenRuntime.tryAnotherSourceAfterDecoderError(message: String): Boolean {
+    if (!message.contains("NO_EXCEEDS_CAPABILITIES")) return false
+    val videoId = activeVideoId ?: return false
+    val failedKey = activeSourceIdentityKey ?: "url:$activeSourceUrl"
+    decoderFailedSourceKeys.add(failedKey)
+    if (decoderFailedSourceKeys.size >= 3) {
+        decoderFailedSourceKeys.clear()
+        return false
+    }
+    if (decoderRetryJob?.isActive == true) return true
+    val failedUrl = activeSourceUrl
+    val failedVideoId = activeVideoId
+    errorMessage = null
+    removeFailedStreamFromCache()
+    decoderRetryJob = scope.launch {
+        PlayerStreamsRepository.loadSources(
+            contentTitle = title, type = contentType ?: parentMetaType, videoId = videoId,
+            season = activeSeasonNumber, episode = activeEpisodeNumber,
+        )
+        val state = withTimeoutOrNull(30_000) {
+            PlayerStreamsRepository.sourceState.first { !it.isAnyLoading }
+        }
+        if (activeSourceUrl != failedUrl || activeVideoId != failedVideoId) return@launch
+        val candidate = state?.groups?.asSequence()?.flatMap { it.streams.asSequence() }
+            ?.firstOrNull { stream ->
+                val url = stream.playableDirectUrl
+                val key = stream.playerSourceIdentityKey()
+                url != null && url != failedUrl && key != null && key !in decoderFailedSourceKeys &&
+                    stream.clientResolve == null && stream.serverTarget == null
+            }
+        if (candidate == null) {
+            decoderFailedSourceKeys.clear()
+            errorMessage = message
+            controlsVisible = !playerControlsLocked
+        } else {
+            // A failed startup may report position zero before the initial seek was applied.
+            val resumeMs = maxOf(playbackSnapshot.positionMs, activeInitialPositionMs)
+            switchToSource(candidate, saveForReuse = false)
+            activeInitialPositionMs = resumeMs
+        }
+    }
+    return true
 }

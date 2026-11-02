@@ -229,6 +229,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     },
                     onSnapshot = { snapshot ->
                         if (!active.value || !updatePlaybackSnapshot(snapshot, playbackKey)) return@PlatformPlayerSurface
+                        if (snapshot.isPlaying) decoderFailedSourceKeys.clear()
                         onVideoBarsReported(snapshot.videoBars)
                         if (snapshot.videoBarsAbsent) onVideoBarsAbsent()
                         switchToAutoIfBarsFound()
@@ -241,7 +242,10 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     },
                     onError = { message ->
                         if (!active.value || playbackKey != activePlaybackKey) return@PlatformPlayerSurface
-                        if (message != null && tryRefreshCredentialedSourceAfterError(message)) {
+                        if (message != null && tryAnotherSourceAfterDecoderError(message)) {
+                            return@PlatformPlayerSurface
+                        }
+                        if (message != null && !message.contains("NO_EXCEEDS_CAPABILITIES") && tryRefreshCredentialedSourceAfterError(message)) {
                             return@PlatformPlayerSurface
                         }
                         errorMessage = message
@@ -707,7 +711,11 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         activeSourceIdentityKey = activeSourceIdentityKey,
         activeTorrentInfoHash = activeTorrentInfoHash,
         onSourceFilterSelected = PlayerStreamsRepository::selectSourceFilter,
-        onSourceStreamSelected = { stream -> switchToSource(stream) },
+        onSourceStreamSelected = { stream ->
+            decoderRetryJob?.cancel()
+            decoderFailedSourceKeys.clear()
+            switchToSource(stream)
+        },
         onReloadSources = {
             val vid = activeVideoId
             if (vid != null) {
