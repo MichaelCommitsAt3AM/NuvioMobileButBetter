@@ -5,9 +5,7 @@ import com.nuvio.app.features.streams.StreamClientResolve
 import com.nuvio.app.features.streams.StreamItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 class PlayerSourceIdentityTest {
     @Test
@@ -53,8 +51,9 @@ class PlayerSourceIdentityTest {
         val other = selected.copy(clientResolve = selected.clientResolve!!.copy(filename = "other.mkv"))
         val active = initialPlayerSourceIdentityKey(selected, "https://cdn.example/resolved", null, null)
 
-        assertTrue(selected.isCurrentPlayerStream("https://cdn.example/resolved", "1080p", active, null))
-        assertFalse(other.isCurrentPlayerStream("https://cdn.example/resolved", "1080p", active, null))
+        val current = PlayerCurrentStream(url = "https://cdn.example/resolved", name = "1080p", identityKey = active)
+        assertEquals(1, listOf(other, selected).currentPlayerStreamIndex(current))
+        assertEquals(-1, listOf(other).currentPlayerStreamIndex(current))
     }
 
     @Test
@@ -62,12 +61,16 @@ class PlayerSourceIdentityTest {
         val direct = StreamItem(
             name = "Direct", addonName = "Provider", addonId = "provider", url = "https://example/movie",
         )
-        assertTrue(direct.isCurrentPlayerStream("https://example/movie", "Direct", null, null))
-        assertFalse(direct.isCurrentPlayerStream("https://example/other", "Direct", null, null))
+        assertEquals(0, listOf(direct).currentPlayerStreamIndex(PlayerCurrentStream(url = "https://example/movie")))
+        assertEquals(-1, listOf(direct).currentPlayerStreamIndex(PlayerCurrentStream(url = "https://example/other")))
 
         val torrent = StreamItem(
             name = "Torrent", addonName = "Provider", addonId = "provider", infoHash = "ABC", fileIdx = 2,
         )
-        assertTrue(torrent.isCurrentPlayerStream("torrent://abc", "Torrent", null, "ABC"))
+        val otherFile = torrent.copy(fileIdx = 1)
+        val current = PlayerCurrentStream(infoHash = "abc", fileIdx = 2, identityKey = torrent.playerSourceIdentityKey())
+        assertEquals(1, listOf(otherFile, torrent).currentPlayerStreamIndex(current))
+        assertEquals(-1, listOf(otherFile).currentPlayerStreamIndex(current))
+        assertEquals(1, listOf(otherFile, torrent).currentPlayerStreamIndex(current.copy(identityKey = null)))
     }
 }

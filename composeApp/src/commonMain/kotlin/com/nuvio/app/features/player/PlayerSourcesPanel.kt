@@ -29,10 +29,7 @@ fun PlayerSourcesPanel(
     currentSeason: Int?,
     currentEpisode: Int?,
     currentEpisodeTitle: String?,
-    currentStreamUrl: String?,
-    currentStreamName: String?,
-    currentSourceIdentityKey: String?,
-    currentTorrentInfoHash: String?,
+    currentStream: PlayerCurrentStream?,
     onFilterSelected: (String?) -> Unit,
     onStreamSelected: (StreamItem) -> Unit,
     onReload: () -> Unit,
@@ -95,10 +92,7 @@ fun PlayerSourcesPanel(
                 streamsUiState = streamsUiState,
                 onStreamSelected = onStreamSelected,
                 modifier = Modifier.weight(1f),
-                currentStreamUrl = currentStreamUrl,
-                currentStreamName = currentStreamName,
-                currentSourceIdentityKey = currentSourceIdentityKey,
-                currentTorrentInfoHash = currentTorrentInfoHash,
+                currentStream = currentStream,
                 currentLabel = stringResource(Res.string.compose_player_playing),
             )
         }
@@ -119,19 +113,60 @@ internal fun List<StreamItem>.stablePlayerKeys(): List<String> {
     }
 }
 
-internal fun StreamItem.isCurrentPlayerStream(
-    currentUrl: String?,
-    currentName: String?,
-    currentSourceIdentityKey: String?,
-    currentTorrentInfoHash: String?,
-): Boolean {
-    val activeKey = currentSourceIdentityKey
-    if (activeKey != null) return playerSourceIdentityKey() == activeKey
-    if (!currentUrl.isNullOrBlank() && playableDirectUrl == currentUrl) return true
-    if (!currentName.isNullOrBlank() && streamLabel.equals(currentName, ignoreCase = true) &&
-        playableDirectUrl == currentUrl
-    ) return true
-    val infoHash = p2pInfoHash
-    if (infoHash != null && infoHash == currentTorrentInfoHash) return true
-    return false
+data class PlayerCurrentStream(
+    val url: String? = null,
+    val name: String? = null,
+    val description: String? = null,
+    val addonId: String? = null,
+    val infoHash: String? = null,
+    val fileIdx: Int? = null,
+    val filename: String? = null,
+    val identityKey: String? = null,
+)
+
+internal fun List<StreamItem>.currentPlayerStreamIndex(current: PlayerCurrentStream?): Int {
+    if (current == null) return -1
+    current.identityKey?.let { key ->
+        return indexOfFirst { it.playerSourceIdentityKey() == key }
+    }
+    val isSameAddon = { stream: StreamItem ->
+        current.addonId.isNullOrBlank() || stream.addonId == current.addonId
+    }
+
+    if (!current.infoHash.isNullOrBlank()) {
+        val hashMatch = indexOfFirst { stream ->
+            stream.p2pInfoHash.equals(current.infoHash, ignoreCase = true) &&
+                (current.fileIdx == null || stream.p2pFileIdx == current.fileIdx) &&
+                isSameAddon(stream)
+        }
+        if (hashMatch >= 0) return hashMatch
+    }
+
+    if (!current.url.isNullOrBlank()) {
+        val urlMatch = indexOfFirst { stream -> stream.playableDirectUrl == current.url }
+        if (urlMatch >= 0) return urlMatch
+    }
+
+    // Addons may issue a new URL per request, so match what identifies the release instead.
+    // Filenames and templates can repeat across streams, so only trust a single result.
+    if (!current.filename.isNullOrBlank()) {
+        val filenameMatches = indices.filter { index ->
+            val stream = this[index]
+            (stream.behaviorHints.filename ?: stream.clientResolve?.filename) == current.filename &&
+                isSameAddon(stream)
+        }
+        filenameMatches.singleOrNull()?.let { return it }
+    }
+
+    if (!current.name.isNullOrBlank()) {
+        val nameMatches = indices.filter { index ->
+            val stream = this[index]
+            stream.streamLabel.equals(current.name, ignoreCase = true) &&
+                isSameAddon(stream) &&
+                (current.description == null || stream.streamSubtitle == current.description)
+        }
+        nameMatches.singleOrNull()?.let { return it }
+    }
+
+    return -1
 }

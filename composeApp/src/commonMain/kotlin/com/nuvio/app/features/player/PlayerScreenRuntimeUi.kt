@@ -22,9 +22,13 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioStatusModal
+import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.core.ui.LocalFold
 import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.party.PartyRepository
@@ -39,7 +43,11 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
-internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
+internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
+    partyPanelWidth: Dp,
+    partyPanelInset: Dp,
+    dockPartyPanel: Boolean,
+) {
     val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
     val kidsProfile = profileState.activeProfile?.takeIf { it.kidsEnabled }
     var kidsAuthorized by remember(kidsProfile, parentMetaType, parentMetaId) { mutableStateOf(kidsProfile == null) }
@@ -149,6 +157,8 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .padding(end = partyPanelInset)
+            .clipToBounds()
             .onSizeChanged { layoutSize = it }
             .playerSurfaceTapGestures(
                 layoutSize = layoutSize,
@@ -183,7 +193,33 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     ) {
         val playerSurfaceSourceUrl = if (isP2pPlaybackActive) p2pResolvedSourceUrl else activeSourceUrl
         val playbackKey = activePlaybackKey
+        val sourcePlaybackKey = playbackKey.copy(playbackEngine = null)
         val initialPositionRequestKey = currentInitialPositionRequestKey()
+        var decoderErrorBeforeFailover by remember(sourcePlaybackKey) { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(sourcePlaybackKey) {
+            engineFailoverTriggered = false
+            engineFailoverDisarmed = false
+            playbackEngineOverride = null
+        }
+
+        val resolvedAutoEngineState = remember(sourcePlaybackKey) {
+            mutableStateOf<AndroidPlaybackEngine?>(null)
+        }
+        if (!initialLoadCompleted || resolvedAutoEngineState.value == null) {
+            resolvedAutoEngineState.value = resolveAutoPlaybackEngine(
+                playbackEngineSetting = playerSettingsUiState.androidPlaybackEngine,
+                videoId = activeVideoId,
+                streamFilename = activeTorrentFilename ?: activeStreamFilename,
+                streamName = activeStreamTitle,
+                streamDescription = activeStreamSubtitle,
+                contentTitle = title,
+                genres = playerMeta?.genres.orEmpty(),
+                country = playerMeta?.country,
+            )
+        }
+        val resolvedAutoEngine = resolvedAutoEngineState.value
+
         // How much Auto would zoom to push the video's baked-in black bars out of view, worked out
         // from the measured viewport and the bars the engine detected (or, until it has, the bars
         // remembered for this season). 1f = nothing to offer.
@@ -194,7 +230,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             viewportWidthPx = layoutSize.width,
             viewportHeightPx = layoutSize.height,
         )
-        autoZoom = autoZoomValue
+        val fitForPartyPanel = dockPartyPanel || partyPanelInset > 0.dp
+        val surfaceResizeMode = if (fitForPartyPanel) PlayerResizeMode.Fit else resizeMode
+        autoZoom = if (fitForPartyPanel) 1f else autoZoomValue
         if (playerSurfaceSourceUrl != null && kidsAuthorized) {
             key(playbackKey) {
                 val active = remember { mutableStateOf(true) }
@@ -212,10 +250,10 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     playWhenReady = shouldPlay,
                     initialPositionMs = activeInitialPositionMs.takeIf { it > 0L },
                     initialPositionRequestKey = initialPositionRequestKey,
-                    resizeMode = resizeMode,
-                    autoZoom = if (resizeMode == PlayerResizeMode.Auto) autoZoomValue else 1f,
+                    resizeMode = surfaceResizeMode,
+                    autoZoom = if (surfaceResizeMode == PlayerResizeMode.Auto) autoZoomValue else 1f,
                     detectVideoBars = true,
-                    playbackEngine = playbackEngineOverride,
+                    playbackEngine = playbackEngineOverride ?: resolvedAutoEngine,
                     onInitialPositionHandled = { key, handled ->
                         if (active.value && playbackKey == activePlaybackKey && key == currentInitialPositionRequestKey()) {
                             initialSeekApplied = handled
@@ -229,7 +267,10 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     },
                     onSnapshot = { snapshot ->
                         if (!active.value || !updatePlaybackSnapshot(snapshot, playbackKey)) return@PlatformPlayerSurface
-                        if (snapshot.isPlaying) decoderFailedSourceKeys.clear()
+                        if (snapshot.isPlaying) {
+                            decoderErrorBeforeFailover = null
+                            decoderFailedSourceKeys.clear()
+                        }
                         onVideoBarsReported(snapshot.videoBars)
                         if (snapshot.videoBarsAbsent) onVideoBarsAbsent()
                         switchToAutoIfBarsFound()
@@ -242,10 +283,25 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     },
                     onError = { message ->
                         if (!active.value || playbackKey != activePlaybackKey) return@PlatformPlayerSurface
-                        if (message != null && tryAnotherSourceAfterDecoderError(message)) {
+                        val capabilityError = message?.takeIf { it.contains("NO_EXCEEDS_CAPABILITIES") }
+                        // In Auto, give the alternate engine a chance on the same stream first.
+                        if (capabilityError != null &&
+                            playerSettingsUiState.androidPlaybackEngine == AndroidPlaybackEngine.Auto &&
+                            maybeFailoverPlaybackEngine(resolvedAutoEngine)
+                        ) {
+                            decoderErrorBeforeFailover = capabilityError
                             return@PlatformPlayerSurface
                         }
-                        if (message != null && !message.contains("NO_EXCEEDS_CAPABILITIES") && tryRefreshCredentialedSourceAfterError(message)) {
+                        val decoderError = capabilityError ?: decoderErrorBeforeFailover
+                        if (message != null && decoderError != null && tryAnotherSourceAfterDecoderError(decoderError)) {
+                            return@PlatformPlayerSurface
+                        }
+                        if (message != null && decoderError == null && tryRefreshCredentialedSourceAfterError(message)) {
+                            return@PlatformPlayerSurface
+                        }
+                        // Engine failover is decided here, driven by its own player setting;
+                        // the engine's own decoder/MIME retries have already been tried.
+                        if (message != null && maybeFailoverPlaybackEngine(resolvedAutoEngine)) {
                             return@PlatformPlayerSurface
                         }
                         errorMessage = message
@@ -299,10 +355,15 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 isInPip = isInPip,
             )
         }
-        Box(modifier = panelModifier) {
-            RenderPlayerModals(displayedPositionMs = displayedPositionMs)
-            RenderParty(runtime = runtime)
-        }
+    }
+    Box(modifier = panelModifier) {
+        RenderParty(
+            runtime = runtime,
+            panelWidth = partyPanelWidth,
+            modal = !dockPartyPanel,
+            panelVisible = showPartyPanel && !isInPip,
+        )
+        RenderPlayerModals(displayedPositionMs = displayedPositionMs)
     }
 }
 
@@ -388,11 +449,12 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 flushWatchProgress()
                 args.onBack()
             },
-            onPartyClick = if (PartyRepository.available.collectAsStateWithLifecycle().value) {
-                { openPartyPanel() }
-            } else {
-                null
-            },
+            // Watch Party is disabled in the player while it is unavailable.
+            // onPartyClick = if (PartyRepository.available.collectAsStateWithLifecycle().value) {
+            //     { openPartyPanel() }
+            // } else {
+            //     null
+            // },
             partyActive = partyActive,
             onTogglePlayback = { togglePlayback() },
             onSeekBack = { seekBy(-10_000L) },
@@ -706,10 +768,16 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         sourceStreamsState = sourceStreamsState,
         contentTitle = title,
         activeEpisodeTitle = activeEpisodeTitle,
-        activeSourceUrl = activeSourceUrl,
-        activeStreamTitle = activeStreamTitle,
-        activeSourceIdentityKey = activeSourceIdentityKey,
-        activeTorrentInfoHash = activeTorrentInfoHash,
+        currentStream = PlayerCurrentStream(
+            url = activeSourceUrl,
+            name = activeStreamTitle,
+            description = activeStreamSubtitle,
+            addonId = activeProviderAddonId,
+            infoHash = activeStream?.p2pInfoHash ?: activeTorrentInfoHash,
+            fileIdx = activeStream?.p2pFileIdx ?: activeTorrentFileIdx,
+            filename = activeSourceFilename,
+            identityKey = activeSourceIdentityKey,
+        ),
         onSourceFilterSelected = PlayerStreamsRepository::selectSourceFilter,
         onSourceStreamSelected = { stream ->
             decoderRetryJob?.cancel()
