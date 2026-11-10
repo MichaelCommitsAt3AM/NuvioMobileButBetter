@@ -161,7 +161,12 @@ jobs:
 
       - name: Build full release APKs
         if: inputs.mode != 'dry-run'
-        run: ./gradlew :androidApp:assembleFullRelease --stacktrace
+        env:
+          # gradle.properties asks for a 12 GB Gradle heap and an 8 GB Kotlin
+          # daemon, which can push a 16 GB hosted runner into OOM (the run then
+          # dies as "the hosted runner lost communication with the server").
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1536m
+        run: ./gradlew :androidApp:assembleFullRelease --stacktrace -Pkotlin.daemon.jvmargs=-Xmx3g
 
       - name: Upload build artifacts
         if: inputs.mode != 'dry-run'
