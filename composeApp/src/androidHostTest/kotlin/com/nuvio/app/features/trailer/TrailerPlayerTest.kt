@@ -1,6 +1,9 @@
 package com.nuvio.app.features.trailer
 
 import android.app.Application
+import android.view.Window
+import android.view.WindowManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -8,9 +11,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.window.DialogWindowProvider
 import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.features.details.components.TrailerPlayerPopup
 import com.nuvio.app.features.player.AudioTrack
+import com.nuvio.app.features.player.FullscreenPlayerDialog
 import com.nuvio.app.features.player.PlayerEngineController
 import com.nuvio.app.features.player.PlayerPlaybackSnapshot
 import com.nuvio.app.features.player.SubtitleTrack
@@ -80,6 +85,22 @@ class TrailerPlayerTest {
         assertFalse(state.playWhenReady)
         assertNull(state.controller)
         assertEquals(1, state.presentationId)
+    }
+
+    @Test
+    fun fullscreenDialogCompletelyBlacksOutAppBehindIt() {
+        lateinit var window: Window
+        compose.setContent {
+            FullscreenPlayerDialog(onDismiss = {}) {
+                window = (LocalView.current.parent as DialogWindowProvider).window
+            }
+        }
+
+        compose.runOnIdle {
+            val attributes = window.attributes
+            assertTrue((attributes.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND) != 0)
+            assertEquals(1f, attributes.dimAmount)
+        }
     }
 
     @Test
