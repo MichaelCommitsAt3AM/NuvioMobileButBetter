@@ -13,6 +13,10 @@ Nuvio is a Kotlin Multiplatform + Compose Multiplatform rewrite of a media hub a
 ./scripts/run-mobile.sh android [e|p] [full|playstore]   # e = emulator (default), p = physical device
 ./scripts/run-mobile.sh ios [s|p] [full|appstore]          # s = simulator, p = physical device
 
+# Same thing from Windows PowerShell (native adb.exe/gradlew.bat; Android only,
+# iOS is built on macOS; bash hosts should keep using run-mobile.sh)
+./scripts/run-mobile.ps1 android [e|p] [full|playstore]
+
 # Direct Gradle build tasks
 ./gradlew :composeApp:assembleDebug
 ./gradlew :androidApp:assembleFullDebug

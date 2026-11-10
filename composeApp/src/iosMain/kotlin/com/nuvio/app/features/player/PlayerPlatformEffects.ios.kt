@@ -81,6 +81,10 @@ actual fun ManagePlayerPictureInPicture(
 @Composable
 actual fun rememberIsInPictureInPicture(): Boolean = false
 
+// The iOS player has no audio delay control yet.
+@Composable
+internal actual fun rememberAudioOutputKey(enabled: Boolean): String? = null
+
 @Composable
 actual fun rememberDisplaySupportsHdr(): Boolean =
     remember { UIScreen.mainScreen.potentialEDRHeadroom > 1.0 }
