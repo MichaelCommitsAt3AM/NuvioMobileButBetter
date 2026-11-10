@@ -230,7 +230,9 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
             viewportWidthPx = layoutSize.width,
             viewportHeightPx = layoutSize.height,
         )
-        val fitForPartyPanel = dockPartyPanel || partyPanelInset > 0.dp
+        // Fit only while the docked panel actually takes screen space; the panel being merely
+        // dockable (any landscape phone) must not override the user's chosen resize mode.
+        val fitForPartyPanel = partyPanelInset > 0.dp
         val surfaceResizeMode = if (fitForPartyPanel) PlayerResizeMode.Fit else resizeMode
         autoZoom = if (fitForPartyPanel) 1f else autoZoomValue
         if (playerSurfaceSourceUrl != null && kidsAuthorized) {
