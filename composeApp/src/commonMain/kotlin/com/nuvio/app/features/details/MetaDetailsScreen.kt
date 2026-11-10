@@ -796,12 +796,19 @@ fun MetaDetailsScreen(
                                 if (currentRequestToken != trailerRequestToken) {
                                     return@launch
                                 }
-                                trailerPlaybackSource = resolvedSource
-                                trailerErrorMessage = if (resolvedSource == null) {
-                                    getString(Res.string.trailer_no_playable_stream)
-                                } else {
-                                    null
+                                if (resolvedSource == null) {
+                                    // In-app extraction can be refused (Google's abuse
+                                    // bounce, captcha walls). Hand the trailer to YouTube
+                                    // instead of leaving the popup on a dead end.
+                                    trailerLoading = false
+                                    trailerPlaybackSource = null
+                                    trailerErrorMessage = null
+                                    selectedTrailer = null
+                                    runCatching { uriHandler.openUri(youtubeUrl) }
+                                    return@launch
                                 }
+                                trailerPlaybackSource = resolvedSource
+                                trailerErrorMessage = null
                                 trailerLoading = false
                             }
                         }
