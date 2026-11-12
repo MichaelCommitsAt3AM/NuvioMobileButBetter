@@ -64,6 +64,10 @@ Cross-device state sync (watch progress, library, settings) goes through `core/s
 
 `SyncClientIdentity` mints a stable per-install id passed to Supabase as `p_origin_client_id`, letting a device distinguish its own writes from other devices'. The library has its own incremental delta-sync layer under `features/library/sync/` (`LibrarySyncAdapter` / `SupabaseLibrarySyncAdapter`, `LibrarySyncPaging`, `LibrarySyncReconciler`) instead of re-fetching the whole library — change library sync there, not in `SyncManager`.
 
+### Backend (separate repository)
+
+This app has no backend code of its own. The schema, RPCs, edge functions and storage assets it relies on live in [nuvio_backend](https://github.com/MichaelCommitsAt3AM/nuvio_backend), which is shared with `NuvioDesktopButBetter` (both apps use the same hosted Supabase project). Before changing an RPC call or sync behaviour here, make the matching forward migration in that repo first and apply it, so neither app is ever running against a schema it does not expect.
+
 ### No dependency-injection framework
 
 There's no Koin/Hilt/Dagger — repositories and services are plain objects/classes wired up directly. Follow the existing pattern in whichever feature you're touching rather than introducing a DI container.
