@@ -639,7 +639,7 @@ private fun PlayerScreenRuntime.applyEpisodeStreamMetadata(
     controlsVisible = true
 }
 
-private fun PlayerScreenRuntime.saveDirectStreamForReuse(
+internal fun PlayerScreenRuntime.saveDirectStreamForReuse(
     stream: StreamItem,
     url: String,
     videoId: String,

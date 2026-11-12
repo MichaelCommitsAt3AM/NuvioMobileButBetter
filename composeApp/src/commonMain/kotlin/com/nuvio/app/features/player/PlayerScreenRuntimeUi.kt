@@ -292,7 +292,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
                         if (message != null && decoderError != null && tryAnotherSourceAfterDecoderError(decoderError)) {
                             return@PlatformPlayerSurface
                         }
-                        if (message != null && decoderError == null && tryRefreshCredentialedSourceAfterError(message)) {
+                        if (message != null && decoderError == null && tryRefreshExpiredLinkAfterError(message)) {
                             return@PlatformPlayerSurface
                         }
                         // Engine failover is decided here, driven by its own player setting;
