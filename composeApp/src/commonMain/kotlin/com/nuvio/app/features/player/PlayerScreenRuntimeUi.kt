@@ -445,12 +445,11 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 flushWatchProgress()
                 args.onBack()
             },
-            // Watch Party is disabled in the player while it is unavailable.
-            // onPartyClick = if (PartyRepository.available.collectAsStateWithLifecycle().value) {
-            //     { openPartyPanel() }
-            // } else {
-            //     null
-            // },
+            onPartyClick = if (PartyRepository.available.collectAsStateWithLifecycle().value) {
+                { openPartyPanel() }
+            } else {
+                null
+            },
             partyActive = partyActive,
             onTogglePlayback = { togglePlayback() },
             onSeekBack = { seekBy(-10_000L) },

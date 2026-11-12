@@ -10,7 +10,7 @@
     <string name="party_code_label">পার্টি কোড</string>
     <string name="party_copy_invite">আমন্ত্রণ কপি করুন</string>
     <string name="party_invite_copied">আমন্ত্রণ কপি করা হয়েছে</string>
-    <string name="party_invite_message">%1$s কোড ব্যবহার করে আমার Nuvio ওয়াচ পার্টিতে যোগ দিন\n%2$s</string>
+    <string name="party_invite_message">%1$s কোড ব্যবহার করে আমার Nuvio ওয়াচ পার্টিতে যোগ দিন</string>
     <string name="party_seats">%2$dটির মধ্যে %1$dটি আসন</string>
     <string name="party_host">হোস্ট</string>
     <string name="party_you">আপনি</string>

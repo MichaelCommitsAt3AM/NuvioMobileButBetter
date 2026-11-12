@@ -1495,6 +1495,24 @@ internal fun MainAppContent(
                                     requestedSettingsPageName = null
                                 },
                                 onInitialHomeContentRendered = { initialHomeReady = true },
+                                onWatchParty = { media ->
+                                    onPlayManually(
+                                        media.type,
+                                        media.videoId ?: media.metaId,
+                                        media.metaId,
+                                        media.metaType,
+                                        media.title,
+                                        media.logo,
+                                        media.poster,
+                                        media.background,
+                                        media.season,
+                                        media.episode,
+                                        media.episodeTitle,
+                                        null,
+                                        null,
+                                        null,
+                                    )
+                                },
                             )
                         },
                         onBack = {

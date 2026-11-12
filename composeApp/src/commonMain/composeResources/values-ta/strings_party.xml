@@ -10,7 +10,7 @@
     <string name="party_code_label">அறைக் குறியீடு</string>
     <string name="party_copy_invite">அழைப்பை நகலெடு</string>
     <string name="party_invite_copied">அழைப்பு நகலெடுக்கப்பட்டது</string>
-    <string name="party_invite_message">%1$s குறியீட்டைப் பயன்படுத்தி என் Nuvio பார்வை அறையில் சேரவும்\n%2$s</string>
+    <string name="party_invite_message">%1$s குறியீட்டைப் பயன்படுத்தி என் Nuvio பார்வை அறையில் சேரவும்</string>
     <string name="party_seats">%1$d / %2$d இடங்கள்</string>
     <string name="party_host">நிர்வாகி</string>
     <string name="party_you">நீங்கள்</string>

@@ -68,6 +68,8 @@ private data class PendingP2pStreamOpen(
     val isAutoPlay: Boolean,
 )
 
+private var lastAutoPlayedPartyStream: String? = null
+
 @Composable
 internal fun StreamDestination(
     route: StreamRoute,
@@ -407,6 +409,31 @@ internal fun StreamDestination(
         }
     }
 
+    val partyState by PartyRepository.state.collectAsStateWithLifecycle()
+    val partyStream by PartyRepository.sharedStream.collectAsStateWithLifecycle()
+    val party = partyState.party
+    val contentKey = partyMediaKey(
+        metaType = launch.parentMetaType ?: launch.type,
+        metaId = launch.parentMetaId ?: effectiveVideoId,
+        season = launch.seasonNumber,
+        episode = launch.episodeNumber,
+    )
+    val partySource = party?.media?.takeIf { it.key == contentKey }?.source
+    val partySourceLabel = stringResource(Res.string.party_source)
+    val streamHighlight: (StreamItem) -> String? = remember(partySource, partySourceLabel) {
+        { stream -> if (partySource?.matches(stream) == true) partySourceLabel else null }
+    }
+    val sharedLabel = stringResource(Res.string.party_shared_by, party?.member(party.hostMemberId)?.displayName.orEmpty())
+    val isHost = party?.isHost == true
+    val sharedStream = remember(partyStream, sharedLabel, isHost, contentKey) {
+        partyStream
+            ?.takeIf { !isHost && it.mediaKey == contentKey }
+            ?.let { SharedStream(label = sharedLabel, stream = it.toStreamItem()) }
+    }
+    // The host's link is about to start by itself, so show the loading screen instead of the list.
+    val partyAutoPlayPending = sharedStream != null &&
+        lastAutoPlayedPartyStream != "$contentKey|${sharedStream.stream.hashCode()}"
+
     val streamsUiState by StreamsRepository.uiState.collectAsStateWithLifecycle()
     val expectedStreamsRequestToken = StreamsRepository.requestToken(
         type = launch.type,
@@ -415,7 +442,7 @@ internal fun StreamDestination(
         episode = launch.episodeNumber,
         manualSelection = launch.manualSelection,
     )
-    val showLoadingScreen = autoPlayNavigationStarted || resolvingDebridStream || resolvingYouTubeStream || preparingServerStream || streamsUiState.shouldShowAutoPlayLoading(
+    val showLoadingScreen = autoPlayNavigationStarted || partyAutoPlayPending || resolvingDebridStream || resolvingYouTubeStream || preparingServerStream || streamsUiState.shouldShowAutoPlayLoading(
         expectedRequestToken = expectedStreamsRequestToken,
         settings = playerSettings,
         manualSelection = launch.manualSelection,
@@ -787,26 +814,21 @@ internal fun StreamDestination(
         }
     }
 
-    val partyState by PartyRepository.state.collectAsStateWithLifecycle()
-    val partyStream by PartyRepository.sharedStream.collectAsStateWithLifecycle()
-    val party = partyState.party
-    val contentKey = partyMediaKey(
-        metaType = launch.parentMetaType ?: launch.type,
-        metaId = launch.parentMetaId ?: effectiveVideoId,
-        season = launch.seasonNumber,
-        episode = launch.episodeNumber,
-    )
-    val partySource = party?.media?.takeIf { it.key == contentKey }?.source
-    val partySourceLabel = stringResource(Res.string.party_source)
-    val streamHighlight: (StreamItem) -> String? = remember(partySource, partySourceLabel) {
-        { stream -> if (partySource?.matches(stream) == true) partySourceLabel else null }
-    }
-    val sharedLabel = stringResource(Res.string.party_shared_by, party?.member(party.hostMemberId)?.displayName.orEmpty())
-    val isHost = party?.isHost == true
-    val sharedStream = remember(partyStream, sharedLabel, isHost, contentKey) {
-        partyStream
-            ?.takeIf { !isHost && it.mediaKey == contentKey }
-            ?.let { SharedStream(label = sharedLabel, stream = it.toStreamItem()) }
+    // Play the host's own link straight away so everyone is on the identical stream. Backing out of
+    // the player returns to the list without starting it again.
+    LaunchedEffect(sharedStream) {
+        val shared = sharedStream ?: return@LaunchedEffect
+        val key = "$contentKey|${shared.stream.hashCode()}"
+        if (lastAutoPlayedPartyStream == key) return@LaunchedEffect
+        lastAutoPlayedPartyStream = key
+        openSelectedStream(
+            stream = shared.stream,
+            resolvedResumePositionMs = launch.resumePositionMs,
+            resolvedResumeProgressFraction = launch.resumeProgressFraction,
+            forceExternal = false,
+            forceInternal = false,
+            saveForReuse = false,
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

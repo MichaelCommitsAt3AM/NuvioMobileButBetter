@@ -9,7 +9,7 @@
     <string name="party_code_label">קוד מסיבה</string>
     <string name="party_copy_invite">העתקת הזמנה</string>
     <string name="party_invite_copied">ההזמנה הועתקה</string>
-    <string name="party_invite_message">הצטרפו למסיבת הצפייה שלי ב-Nuvio עם הקוד %1$s\n%2$s</string>
+    <string name="party_invite_message">הצטרפו למסיבת הצפייה שלי ב-Nuvio עם הקוד %1$s</string>
     <string name="party_seats">%1$d מתוך %2$d מקומות</string>
     <string name="party_host">מארח</string>
     <string name="party_you">אני</string>

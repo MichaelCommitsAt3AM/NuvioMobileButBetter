@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Dp
@@ -127,6 +128,7 @@ fun HomeScreen(
     continueWatchingDisintegrationRequest: DisintegrationRequest<String>? = null,
     onFolderClick: ((collectionId: String, folderId: String) -> Unit)? = null,
     onFirstCatalogRendered: (() -> Unit)? = null,
+    onWatchParty: (com.nuvio.app.features.party.PartyMedia) -> Unit = {},
 ) {
     LaunchedEffect(Unit) {
         AddonRepository.initialize()
@@ -1203,6 +1205,11 @@ fun HomeScreen(
                 }
             }
         }
+
+        com.nuvio.app.features.party.PartyHomeEntry(
+            modifier = Modifier.align(Alignment.TopEnd),
+            onWatch = onWatchParty,
+        )
     }
 }
 
