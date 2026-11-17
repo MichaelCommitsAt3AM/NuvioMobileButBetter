@@ -24,6 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -32,11 +33,13 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
+import com.nuvio.app.features.details.HeroTrailerPlaybackConfig
 import com.nuvio.app.features.player.PlatformPlaybackDataSourceFactory
 import com.nuvio.app.features.player.PlayerDiskCache
 import com.nuvio.app.features.trailer.LetterboxDetector
 import com.nuvio.app.features.trailer.LetterboxSampler
 import com.nuvio.app.features.trailer.LetterboxTracker
+import co.touchlab.kermit.Logger
 import kotlinx.coroutines.delay
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -46,9 +49,13 @@ actual fun HeroTrailerPlayerSurface(
     sourceAudioUrl: String?,
     playWhenReady: Boolean,
     muted: Boolean,
+    startPositionMs: Long,
+    seekRequest: com.nuvio.app.features.details.HeroTrailerSeekRequest?,
     modifier: Modifier,
     onReady: () -> Unit,
     onEnded: () -> Unit,
+    onProgress: (positionMs: Long, durationMs: Long) -> Unit,
+    onBufferingChanged: (Boolean) -> Unit,
     onError: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -57,6 +64,8 @@ actual fun HeroTrailerPlayerSurface(
     val latestOnReady = rememberUpdatedState(onReady)
     val latestOnEnded = rememberUpdatedState(onEnded)
     val latestOnError = rememberUpdatedState(onError)
+    val latestOnProgress = rememberUpdatedState(onProgress)
+    val latestOnBuffering = rememberUpdatedState(onBufferingChanged)
     var playerContainer by remember { mutableStateOf<HeroTrailerTextureContainer?>(null) }
 
     val dataSourceFactory = remember(context) {
@@ -67,27 +76,33 @@ actual fun HeroTrailerPlayerSurface(
             useYoutubeChunkedPlayback = true,
         )
     }
-    val exoPlayer = remember(sourceUrl, sourceAudioUrl, dataSourceFactory) {
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build()
-            .apply {
-                if (!sourceAudioUrl.isNullOrBlank()) {
-                    setMediaSource(
-                        MergingMediaSource(
-                            mediaSourceFactory.createMediaSource(MediaItem.fromUri(sourceUrl)),
-                            mediaSourceFactory.createMediaSource(MediaItem.fromUri(sourceAudioUrl)),
-                        ),
-                    )
-                } else {
-                    setMediaItem(MediaItem.fromUri(sourceUrl))
+    val trailerKey = "$sourceUrl|${sourceAudioUrl.orEmpty()}"
+    // The player outlives this composable: scrolling the hero off screen hands it back to the
+    // pool, and scrolling back returns the same buffered player at the same position.
+    val exoPlayer = remember(trailerKey, dataSourceFactory) {
+        HeroTrailerPlayerPool.acquire(trailerKey) {
+            val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+            ExoPlayer.Builder(context)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build()
+                .apply {
+                    if (!sourceAudioUrl.isNullOrBlank()) {
+                        setMediaSource(
+                            MergingMediaSource(
+                                mediaSourceFactory.createMediaSource(MediaItem.fromUri(sourceUrl)),
+                                mediaSourceFactory.createMediaSource(MediaItem.fromUri(sourceAudioUrl)),
+                            ),
+                        )
+                    } else {
+                        setMediaItem(MediaItem.fromUri(sourceUrl))
+                    }
+                    repeatMode = Player.REPEAT_MODE_OFF
+                    // The sound eases in once playback is running (see the fade effect below).
+                    volume = 0f
+                    if (startPositionMs > 0L) seekTo(startPositionMs)
+                    prepare()
                 }
-                repeatMode = Player.REPEAT_MODE_OFF
-                volume = if (muted) 0f else 1f
-                prepare()
-            }
-            .also { PlayerDiskCache.onPlaybackStarted() }
+        }
     }
     var hasRenderedFirstFrame by remember(exoPlayer) { mutableStateOf(false) }
     var letterboxZoom by remember(exoPlayer) { mutableFloatStateOf(1f) }
@@ -108,16 +123,19 @@ actual fun HeroTrailerPlayerSurface(
             private var endedReported = false
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                latestOnBuffering.value(playbackState == Player.STATE_BUFFERING)
                 when (playbackState) {
                     Player.STATE_READY -> {
                         if (!readyReported) {
                             readyReported = true
+                            Logger.withTag("HeroTrailer").d { "player ready" }
                             latestOnReady.value()
                         }
                     }
                     Player.STATE_ENDED -> {
                         if (!endedReported) {
                             endedReported = true
+                            Logger.withTag("HeroTrailer").d { "player ended" }
                             latestOnEnded.value()
                         }
                     }
@@ -134,6 +152,7 @@ actual fun HeroTrailerPlayerSurface(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                Logger.withTag("HeroTrailer").w(error) { "player error: ${error.errorCodeName}" }
                 detachVideoSurface()
                 latestOnError.value()
             }
@@ -155,14 +174,16 @@ actual fun HeroTrailerPlayerSurface(
             }
         }
         exoPlayer.addListener(listener)
+        // A pooled player may already be buffered (or finished), in which case no state change
+        // will fire for this new listener, so report where it stands.
+        listener.onPlaybackStateChanged(exoPlayer.playbackState)
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             exoPlayer.removeListener(listener)
             detachVideoSurface()
-            exoPlayer.stop()
-            exoPlayer.release()
-            PlayerDiskCache.onPlaybackStopped()
+            // Keep the player for a while instead of releasing it, so scrolling back is instant.
+            HeroTrailerPlayerPool.release(trailerKey)
             playerContainer = null
         }
     }
@@ -181,13 +202,43 @@ actual fun HeroTrailerPlayerSurface(
         }
     }
 
-    LaunchedEffect(exoPlayer, muted) {
-        exoPlayer.volume = if (muted) 0f else 1f
+    // Fork-only: ease the sound in whenever playback starts or resumes instead of snapping on.
+    LaunchedEffect(exoPlayer, muted, playWhenReady) {
+        // Only claim audio focus once the user unmutes, so a muted trailer never interrupts music.
+        exoPlayer.setAudioAttributes(AudioAttributes.DEFAULT, !muted)
+        if (muted) {
+            exoPlayer.volume = 0f
+            return@LaunchedEffect
+        }
+        if (!playWhenReady) return@LaunchedEffect
+        exoPlayer.volume = 0f
+        val steps = SOUND_FADE_IN_MS / SOUND_FADE_STEP_MS
+        for (step in 1..steps) {
+            delay(SOUND_FADE_STEP_MS)
+            exoPlayer.volume = step.toFloat() / steps
+        }
+        exoPlayer.volume = 1f
+    }
+
+    // Fork-only: jump to the position the user dragged the progress bar to.
+    LaunchedEffect(exoPlayer, seekRequest?.token) {
+        seekRequest?.let { exoPlayer.seekTo(it.positionMs) }
+    }
+
+    // Fork-only: report position and duration for the remaining-time pill and progress line.
+    LaunchedEffect(exoPlayer) {
+        while (true) {
+            delay(HeroTrailerPlaybackConfig.PROGRESS_INTERVAL_MS)
+            val duration = exoPlayer.duration
+            if (duration > 0L && exoPlayer.playbackState != Player.STATE_IDLE) {
+                latestOnProgress.value(exoPlayer.currentPosition.coerceAtLeast(0L), duration)
+            }
+        }
     }
 
     LaunchedEffect(exoPlayer, hasRenderedFirstFrame) {
         letterboxZoom = 1f
-        if (!hasRenderedFirstFrame) return@LaunchedEffect
+        if (!hasRenderedFirstFrame || !LETTERBOX_ZOOM_ENABLED) return@LaunchedEffect
         val tracker = LetterboxTracker()
         val sampler = LetterboxSampler()
         try {
@@ -281,12 +332,19 @@ private class HeroTrailerTextureContainer(
         val viewAspectRatio = viewWidth / viewHeight
         textureTransform.reset()
         if (viewAspectRatio > videoAspectRatio) {
-            val scaleY = viewAspectRatio / videoAspectRatio
-            textureTransform.setScale(1f, scaleY, viewWidth / 2f, viewHeight / 2f)
-        } else {
+            // Fork-only: fit (never crop) so the trailer keeps its original aspect ratio.
             val scaleX = videoAspectRatio / viewAspectRatio
             textureTransform.setScale(scaleX, 1f, viewWidth / 2f, viewHeight / 2f)
+        } else {
+            val scaleY = viewAspectRatio / videoAspectRatio
+            textureTransform.setScale(1f, scaleY, viewWidth / 2f, viewHeight / 2f)
         }
         textureView.setTransform(textureTransform)
     }
 }
+
+private const val SOUND_FADE_IN_MS = 900L
+private const val SOUND_FADE_STEP_MS = 30L
+
+// Fork-only: the trailer is shown whole, with its own bezels, never zoomed to hide them.
+private const val LETTERBOX_ZOOM_ENABLED = false

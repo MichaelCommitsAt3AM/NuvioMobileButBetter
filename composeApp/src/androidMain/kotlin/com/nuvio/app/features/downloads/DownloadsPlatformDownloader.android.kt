@@ -3,6 +3,7 @@ package com.nuvio.app.features.downloads
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.nuvio.app.features.notifications.EpisodeReleaseNotificationPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,6 +45,7 @@ internal actual object DownloadsPlatformDownloader {
     ): DownloadsTaskHandle {
         val scheduler = checkNotNull(downloadScheduler) { "Downloads are not initialized" }
         val transfer = scheduler.enqueue(request.item)
+        requestNotificationPermissionIfNeeded()
         val observer = observerScope.launch {
             scheduler.store.transfers.map { it[request.destinationFileName] }
                 .distinctUntilChanged()
@@ -65,6 +67,19 @@ internal actual object DownloadsPlatformDownloader {
                 if (scheduler.store.get(request.destinationFileName)?.generation == transfer.generation) {
                     scheduler.pause(request.destinationFileName)
                 }
+            }
+        }
+    }
+
+    /**
+     * Android 13+ keeps every notification hidden until the user allows them, which also hides the progress
+     * notification that keeps a download visible and running in the background. Ask when a download starts.
+     * Android stops showing the prompt after repeated denials, so this never nags.
+     */
+    private fun requestNotificationPermissionIfNeeded() {
+        observerScope.launch {
+            if (!EpisodeReleaseNotificationPlatform.notificationsAuthorized()) {
+                EpisodeReleaseNotificationPlatform.requestAuthorization()
             }
         }
     }

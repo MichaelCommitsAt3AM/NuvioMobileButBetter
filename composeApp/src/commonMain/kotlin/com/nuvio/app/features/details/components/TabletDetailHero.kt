@@ -208,11 +208,15 @@ private fun BackdropArtwork(
                 sourceAudioUrl = heroTrailerSourceAudioUrl,
                 playWhenReady = heroTrailerPlayWhenReady(),
                 muted = heroTrailerMuted,
+                startPositionMs = 0L,
+                seekRequest = null,
                 modifier = artworkModifier.graphicsLayer {
                     alpha = trailerAlpha
                 },
                 onReady = onHeroTrailerReady,
                 onEnded = onHeroTrailerFinished,
+                onProgress = { _, _ -> },
+                onBufferingChanged = {},
                 onError = onHeroTrailerFinished,
             )
         }

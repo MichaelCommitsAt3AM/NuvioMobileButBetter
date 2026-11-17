@@ -59,6 +59,9 @@
     <string name="addons_error_enter_url">Enter an addon URL.</string>
     <string name="addons_input_placeholder">Addon URL</string>
     <string name="addons_install_button">Install Addon</string>
+    <string name="addons_tracking_consent_title">Tracking addon</string>
+    <string name="addons_tracking_consent_body">%1$s is a tracking addon. Nuvio will send it your activity: what you play, pause and stop with the playback position, what you add to or remove from your library, and what you mark as watched or unwatched. This data leaves Nuvio and is handled by the addon's developer and the service it connects to.</string>
+    <string name="addons_tracking_consent_checkbox">I agree to share my watch activity and library with this addon</string>
     <string name="addons_loading_manifest_details">Loading manifest details...</string>
     <string name="addons_modal_checking_message">Validating the manifest URL and loading addon details before install.</string>
     <string name="addons_modal_checking_title">Checking Addon</string>
@@ -827,6 +830,14 @@
     <string name="settings_continue_watching_sort_mode_streaming_desc">Released items first, upcoming at the end</string>
     <string name="settings_continue_watching_sort_mode_split_upcoming">Separate Upcoming Row</string>
     <string name="settings_continue_watching_sort_mode_split_upcoming_desc">Move unaired episodes to a separate Upcoming row</string>
+    <string name="settings_continue_watching_click_action_title">On Select</string>
+    <string name="settings_continue_watching_click_action_description">What opens when you select a Continue Watching item</string>
+    <string name="settings_continue_watching_click_action_stream">Open Stream</string>
+    <string name="settings_continue_watching_click_action_stream_desc">Pick a source or resume playback</string>
+    <string name="settings_continue_watching_click_action_details">Open Details</string>
+    <string name="settings_continue_watching_click_action_details_desc">Open the details page of the title</string>
+    <string name="settings_continue_watching_click_action_details_upcoming">Details for Upcoming Only</string>
+    <string name="settings_continue_watching_click_action_details_upcoming_desc">Open details for episodes that have not aired yet, the stream for the rest</string>
     <string name="upcoming_section_title">Upcoming</string>
     <string name="settings_continue_watching_section_card_style">POSTER CARD STYLE</string>
     <string name="settings_continue_watching_section_on_launch">ON LAUNCH</string>
@@ -1188,6 +1199,7 @@
     <string name="settings_playback_engine_libmpv_description">Use libmpv for Android playback.</string>
     <string name="settings_playback_auto_switch_engine_on_error">Auto-switch engine on playback error</string>
     <string name="settings_playback_auto_switch_engine_on_error_description">Switch to the other playback engine when playback fails, no matter which engine is selected.</string>
+    <string name="settings_playback_auto_switch_engine_blocked_by_fallback">Turn off fallback to next matching source to use this.</string>
     <string name="settings_playback_libmpv_video_output">libmpv Renderer</string>
     <string name="settings_playback_libmpv_video_output_dialog">libmpv Renderer</string>
     <string name="settings_playback_libmpv_hardware_decoding">libmpv Hardware Decoding</string>
@@ -1246,6 +1258,12 @@
     <string name="settings_playback_stream_selection_mode_regex_description">Play first source whose text matches your regex pattern.</string>
     <string name="settings_playback_stream_timeout">Stream Selection Timeout</string>
     <string name="settings_playback_stream_timeout_description">Wait time for addons before selecting.</string>
+    <string name="settings_playback_fallback_next_source">Fallback to next matching source on failure</string>
+    <string name="settings_playback_fallback_next_source_description">If the auto-selected source fails or does not start in time, quietly try the next matching sources.</string>
+    <string name="settings_playback_fallback_max_sources">Sources to try on failure</string>
+    <string name="settings_playback_fallback_startup_timeout">Time for a source to start</string>
+    <string name="settings_playback_fallback_next_source_blocked_by_engine_switch">Turn off auto-switch engine on playback error to use this.</string>
+    <string name="player_error_source_startup_timeout">The source did not start within %1$d seconds.</string>
     <string name="settings_playback_threshold_minutes">Threshold Minutes</string>
     <string name="settings_playback_threshold_mode">Next Episode Threshold Mode</string>
     <string name="settings_playback_threshold_mode_minutes_before_end">Minutes before end</string>
@@ -1977,9 +1995,16 @@
     <string name="library_empty_message">Saved titles will appear here after you tap Save on a details screen.</string>
     <string name="library_empty_title">Your library is empty</string>
     <string name="library_filter_all_types">All types</string>
+    <string name="library_filter_genre">Genre</string>
     <string name="library_filter_list">Select list</string>
     <string name="library_filter_sort">Sort library</string>
     <string name="library_filter_type">Select type</string>
+    <string name="library_filter_watched">Watched</string>
+    <string name="library_filter_year">Year</string>
+    <string name="library_type_all">All</string>
+    <string name="library_watched_filter_all">All</string>
+    <string name="library_watched_filter_watched">Watched</string>
+    <string name="library_watched_filter_unwatched">Unwatched</string>
     <string name="library_layout_show_horizontal">Show horizontal shelves</string>
     <string name="library_layout_show_vertical">Show vertical grid</string>
     <string name="library_load_failed">Couldn't load library</string>
@@ -2447,6 +2472,18 @@
         <item quantity="other">%d titles</item>
     </plurals>
     <!-- Download filter (data saver) -->
+    <string name="details_download_action">Download</string>
+    <string name="download_quality_title">Download</string>
+    <string name="download_quality_desc">Pick a quality. Each one is the best balance of picture quality and file size.</string>
+    <string name="download_quality_loading">Finding the best versions to download…</string>
+    <string name="download_quality_tier_uhd">Ultra HD</string>
+    <string name="download_quality_tier_fhd">Full HD</string>
+    <string name="download_quality_tier_hd">HD</string>
+    <string name="download_quality_size_unknown">Size unknown</string>
+    <string name="download_quality_starting">Starting…</string>
+    <string name="download_quality_error">Could not look up downloads. Please try again.</string>
+    <string name="download_quality_none_found">No streams were found for this title, so there is nothing to download yet.</string>
+    <string name="download_quality_none_fit">None of the available streams fit your download quality limits. Long-press Play to browse all streams.</string>
     <string name="streams_download_filter_label">Download filter</string>
     <string name="streams_download_filter_best_quality">Best quality</string>
     <string name="streams_download_filter_data_saver">Data saver</string>
@@ -2460,7 +2497,7 @@
     <string name="download_filter_section_sources">Allowed file types</string>
     <string name="download_filter_section_sources_desc">Only show these source types while Data Saver is on.</string>
     <string name="download_filter_reset">Reset to defaults</string>
-    <string name="download_filter_reset_desc">Restore 1080p WEB-DL / WEBRip defaults.</string>
+    <string name="download_filter_reset_desc">Restore the Netflix-like 1080p WEB-DL / WEBRip defaults.</string>
     <string name="download_filter_resolution_2160">2160p (4K)</string>
     <string name="download_filter_resolution_1080">1080p</string>
     <string name="download_filter_resolution_720">720p</string>
@@ -2473,8 +2510,15 @@
     <string name="download_filter_source_bluray">Blu-ray</string>
     <string name="download_filter_source_remux">Remux</string>
     <string name="download_filter_section_size">Maximum size</string>
-    <string name="download_filter_section_size_desc">Hide streams larger than this size while Data Saver is on.</string>
+    <string name="download_filter_section_size_desc">Hard cap that always applies, whatever the bitrate. Hide streams larger than this size while Data Saver is on.</string>
     <string name="download_filter_size_value">Up to %1$d GB</string>
+    <string name="download_filter_section_bitrate">Quality limit (bitrate)</string>
+    <string name="download_filter_section_bitrate_desc">File size alone cannot tell a lean encode from a bloated one, because a long film needs more bytes than a short one. This limit compares each file's average bitrate (size divided by runtime) instead. The default of 6 Mbps for 1080p is close to what Netflix streams.</string>
+    <string name="download_filter_bitrate_enabled_title">Limit by bitrate</string>
+    <string name="download_filter_bitrate_enabled_desc">Needs the title runtime. When the runtime is unknown, only the maximum size below applies.</string>
+    <string name="download_filter_bitrate_value">Up to %1$s Mbps at 1080p</string>
+    <string name="download_filter_bitrate_codec_title">Allow less for HEVC / AV1</string>
+    <string name="download_filter_bitrate_codec_desc">HEVC (x265) and AV1 look as good as H.264 at a lower bitrate, so their limit is 60% / 50% of the setting above. Other resolutions scale from the 1080p value.</string>
     <string name="download_filter_unknown_size_title">Show streams with unknown size</string>
     <string name="download_filter_unknown_size_desc">Off by default. When off, streams that don\'t report a file size are hidden while Data Saver is on.</string>
     <string name="settings_playback_auto_skip_segments">Automatic Skipping</string>
@@ -2621,5 +2665,12 @@
     <string name="subtitle_shadow_description">Separate the text from bright scenes.</string>
     <string name="subtitle_shadow_opacity">Shadow opacity</string>
     <string name="subtitle_shadow_size">Shadow size</string>
+    <string name="subtitle_outline_width">Outline width</string>
     <string name="subtitle_reset_appearance">Reset appearance</string>
+    <string name="hero_trailer_label">Trailer</string>
+    <string name="hero_trailer_mute">Mute trailer</string>
+    <string name="hero_trailer_unmute">Unmute trailer</string>
+    <string name="hero_trailer_play_badge">Play trailer</string>
+    <string name="hero_trailer_play">Play</string>
+    <string name="hero_trailer_pause">Pause</string>
 </resources>

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -43,12 +44,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.backdropControlColor
+import com.nuvio.app.features.details.MetaDetailsRepository
+import com.nuvio.app.features.downloads.QualityDownloadSheet
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_play
 import nuvio.composeapp.generated.resources.details_actions_menu_label
+import nuvio.composeapp.generated.resources.details_download_action
 import nuvio.composeapp.generated.resources.hero_add_to_library
 import nuvio.composeapp.generated.resources.hero_mark_unwatched
 import nuvio.composeapp.generated.resources.hero_mark_watched
@@ -74,6 +79,7 @@ fun DetailActionButtons(
     playEnabled: Boolean = true,
     pinnedAction: DetailSecondaryAction? = null,
     secondaryActions: List<DetailSecondaryAction> = emptyList(),
+    trailingAction: DetailSecondaryAction? = null,
     actionsMenuLabel: String = stringResource(Res.string.details_actions_menu_label),
     isTablet: Boolean = false,
     onPlayClick: () -> Unit = {},
@@ -238,6 +244,20 @@ fun DetailActionButtons(
                     }
                 }
             }
+            if (trailingAction != null) {
+                Spacer(modifier = Modifier.width(12.dp))
+                DetailIconAction(
+                    label = trailingAction.label,
+                    icon = trailingAction.icon,
+                    active = trailingAction.isActive,
+                    progress = 1f,
+                    size = iconButtonSize,
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        trailingAction.onClick()
+                    },
+                )
+            }
         }
     }
 }
@@ -266,6 +286,10 @@ fun DetailActions(
             onClick = onClick,
         )
     }
+    val metaState by MetaDetailsRepository.visibleUiState.collectAsStateWithLifecycle()
+    val downloadMeta = metaState.meta?.takeIf { it.type == "movie" }
+    var showDownloadSheet by remember { mutableStateOf(false) }
+    val downloadLabel = stringResource(Res.string.details_download_action)
     DetailActionButtons(
         playLabel = if (playEnabled) playLabel else stringResource(Res.string.playback_unavailable),
         playEnabled = playEnabled,
@@ -290,10 +314,23 @@ fun DetailActions(
                 ),
             )
         },
+        trailingAction = downloadMeta?.let {
+            DetailSecondaryAction(
+                label = downloadLabel,
+                icon = Icons.Rounded.Download,
+                onClick = { showDownloadSheet = true },
+            )
+        },
         isTablet = isTablet,
         onPlayClick = onPlayClick,
         onPlayLongClick = onPlayLongClick,
     )
+    if (showDownloadSheet && downloadMeta != null) {
+        QualityDownloadSheet(
+            meta = downloadMeta,
+            onDismiss = { showDownloadSheet = false },
+        )
+    }
 }
 
 @Composable

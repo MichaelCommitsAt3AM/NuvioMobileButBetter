@@ -33,12 +33,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.util.lerp
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -49,6 +58,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import coil3.compose.AsyncImage
+import com.nuvio.app.features.details.HeroTrailerPlaybackConfig
+import kotlinx.coroutines.delay
 import com.nuvio.app.core.ui.focusedAlignment
 import com.nuvio.app.core.ui.rememberBackdropFocusState
 import com.nuvio.app.core.ui.revealAlpha
@@ -81,6 +92,12 @@ fun DetailHero(
     onHeroTrailerReady: () -> Unit = {},
     onHeroTrailerEnded: () -> Unit = {},
     onHeroTrailerError: () -> Unit = {},
+    heroTrailerPlayBadgeVisible: Boolean = false,
+    onHeroTrailerPlayBadgeClick: () -> Unit = {},
+    heroTrailerStartPositionMs: Long = 0L,
+    heroTrailerUserPaused: Boolean = false,
+    onHeroTrailerUserPausedToggle: () -> Unit = {},
+    onHeroTrailerProgress: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(
@@ -89,9 +106,64 @@ fun DetailHero(
         val heroHeight = detailHeroHeight(maxWidth - verticalBarWidth(), isTablet)
         val trailerAlpha by animateFloatAsState(
             targetValue = if (heroTrailerReady) 1f else 0f,
-            animationSpec = tween(durationMillis = 300),
+            animationSpec = if (isTablet) {
+                tween(durationMillis = 300)
+            } else {
+                // Linear here; the phases below apply their own easing.
+                tween(durationMillis = HeroTrailerPlaybackConfig.FADE_DURATION_MS, easing = LinearEasing)
+            },
             label = "detail_hero_trailer_alpha",
         )
+        // Fork-only (phones): the poster shrinks into the 16:9 frame's rectangle (posterMorph),
+        // then the video crossfades in over it (trailerVideoAlpha), leaving the page background
+        // around the frame. Leaving plays the same steps backwards.
+        val posterMorph = if (isTablet) {
+            0f
+        } else {
+            FastOutSlowInEasing.transform(
+                (trailerAlpha / HeroTrailerPlaybackConfig.MORPH_FRACTION).coerceIn(0f, 1f),
+            )
+        }
+        val trailerVideoAlpha = if (isTablet) {
+            trailerAlpha
+        } else {
+            val start = HeroTrailerPlaybackConfig.VIDEO_FADE_START_FRACTION
+            ((trailerAlpha - start) / (1f - start)).coerceIn(0f, 1f)
+        }
+        val posterFade = if (isTablet) 1f else 1f - posterMorph
+        val posterAlpha = if (isTablet) 1f else 1f - trailerVideoAlpha
+        val density = LocalDensity.current
+        val layoutDirection = LocalLayoutDirection.current
+        val barPadding = LocalVerticalBarPadding.current
+        val frameTopPx = with(density) {
+            (
+                barPadding.calculateTopPadding() +
+                    WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
+                    HeroTrailerPlaybackConfig.FRAME_TOP_OFFSET_DP.dp
+                ).toPx()
+        }
+        val frameStartPx = with(density) { barPadding.calculateLeftPadding(layoutDirection).toPx() }
+        val frameEndPx = with(density) { barPadding.calculateRightPadding(layoutDirection).toPx() }
+        var trailerPositionMs by remember { mutableLongStateOf(heroTrailerStartPositionMs) }
+        var trailerDurationMs by remember { mutableLongStateOf(0L) }
+        // Keep the player composed while the frame fades out after the trailer stops.
+        var shownTrailerUrl by remember { mutableStateOf(heroTrailerSourceUrl) }
+        var shownTrailerAudioUrl by remember { mutableStateOf(heroTrailerSourceAudioUrl) }
+        LaunchedEffect(heroTrailerSourceUrl, heroTrailerSourceAudioUrl) {
+            if (heroTrailerSourceUrl != null) {
+                shownTrailerUrl = heroTrailerSourceUrl
+                shownTrailerAudioUrl = heroTrailerSourceAudioUrl
+            } else if (!isTablet) {
+                delay(HeroTrailerPlaybackConfig.FADE_DURATION_MS.toLong())
+                shownTrailerUrl = null
+                shownTrailerAudioUrl = null
+                trailerPositionMs = 0L
+                trailerDurationMs = 0L
+            } else {
+                shownTrailerUrl = null
+                shownTrailerAudioUrl = null
+            }
+        }
         val muteIconSize = if (isTablet) 20.dp else 22.dp
         val heroChromeTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
             8.dp +
@@ -137,9 +209,28 @@ fun DetailHero(
                                 .align(Alignment.TopCenter)
                                 .fillMaxWidth()
                                 .height(heroHeight)
+                                .drawWithContent {
+                                    if (posterMorph <= 0f) {
+                                        drawContent()
+                                        return@drawWithContent
+                                    }
+                                    // Shrink the visible poster from the whole hero into the
+                                    // trailer frame's rectangle, following the same parallax.
+                                    val shift = scrollOffset() * 0.5f
+                                    val frameWidth = size.width - frameStartPx - frameEndPx
+                                    val frameBottom = frameTopPx + frameWidth * 9f / 16f
+                                    clipRect(
+                                        left = lerp(0f, frameStartPx, posterMorph),
+                                        top = lerp(0f, frameTopPx + shift, posterMorph),
+                                        right = lerp(size.width, size.width - frameEndPx, posterMorph),
+                                        bottom = lerp(size.height, frameBottom + shift, posterMorph),
+                                    ) {
+                                        this@drawWithContent.drawContent()
+                                    }
+                                }
                                 .heroStretchZoom(stretchPx)
                                 .graphicsLayer {
-                                    alpha = backdropFocus.revealAlpha
+                                    alpha = backdropFocus.revealAlpha * posterAlpha
                                     translationY = scrollOffset() * 0.5f
                                     scaleX = 1.08f
                                     scaleY = 1.08f
@@ -165,30 +256,62 @@ fun DetailHero(
                                 .background(MaterialTheme.colorScheme.surface),
                         )
                     }
-                    if (heroTrailerSourceUrl != null) {
-                        HeroTrailerPlayerSurface(
-                            sourceUrl = heroTrailerSourceUrl,
-                            sourceAudioUrl = heroTrailerSourceAudioUrl,
-                            playWhenReady = heroTrailerPlayWhenReady(),
-                            muted = heroTrailerMuted,
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth()
-                                .height(heroHeight)
-                                .heroStretchZoom(stretchPx)
-                                .graphicsLayer {
-                                    alpha = trailerAlpha
-                                    translationY = scrollOffset() * 0.5f
-                                    scaleX = 1.08f
-                                    scaleY = 1.08f
+                    if (isTablet) {
+                        if (heroTrailerSourceUrl != null) {
+                            HeroTrailerPlayerSurface(
+                                sourceUrl = heroTrailerSourceUrl,
+                                sourceAudioUrl = heroTrailerSourceAudioUrl,
+                                playWhenReady = heroTrailerPlayWhenReady(),
+                                muted = heroTrailerMuted,
+                                startPositionMs = 0L,
+                                seekRequest = null,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .height(heroHeight)
+                                    .heroStretchZoom(stretchPx)
+                                    .graphicsLayer {
+                                        alpha = trailerAlpha
+                                        translationY = scrollOffset() * 0.5f
+                                        scaleX = 1.08f
+                                        scaleY = 1.08f
+                                    },
+                                onReady = onHeroTrailerReady,
+                                onEnded = onHeroTrailerEnded,
+                                onProgress = { _, _ -> },
+                                onBufferingChanged = {},
+                                onError = onHeroTrailerError,
+                            )
+                        }
+                    } else {
+                        val frameUrl = shownTrailerUrl
+                        if (frameUrl != null) {
+                            PhoneHeroTrailerFrame(
+                                sourceUrl = frameUrl,
+                                sourceAudioUrl = shownTrailerAudioUrl,
+                                playWhenReady = heroTrailerPlayWhenReady(),
+                                userPaused = heroTrailerUserPaused,
+                                muted = heroTrailerMuted,
+                                startPositionMs = heroTrailerStartPositionMs,
+                                visibility = { trailerVideoAlpha },
+                                scrollOffset = scrollOffset,
+                                positionMs = { trailerPositionMs },
+                                durationMs = { trailerDurationMs },
+                                onUserPausedToggle = onHeroTrailerUserPausedToggle,
+                                onMuteToggle = onHeroTrailerMuteToggle,
+                                onReady = onHeroTrailerReady,
+                                onEnded = onHeroTrailerEnded,
+                                onProgress = { position, duration ->
+                                    trailerPositionMs = position
+                                    trailerDurationMs = duration
+                                    onHeroTrailerProgress(position, duration)
                                 },
-                            onReady = onHeroTrailerReady,
-                            onEnded = onHeroTrailerEnded,
-                            onError = onHeroTrailerError,
-                        )
+                                onError = onHeroTrailerError,
+                            )
+                        }
                     }
                 }
-                if (heroTrailerSourceUrl != null) {
+                if (isTablet && heroTrailerSourceUrl != null) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -231,11 +354,22 @@ fun DetailHero(
                     }
                 }
 
+                if (!isTablet && heroTrailerPlayBadgeVisible && shownTrailerUrl == null) {
+                    HeroTrailerPlayBadge(
+                        onClick = onHeroTrailerPlayBadgeClick,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(LocalVerticalBarPadding.current)
+                            .padding(top = heroChromeTopPadding, end = 22.dp),
+                    )
+                }
+
                 if (!cinematicBackground) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(if (isTablet) 360.dp else 320.dp)
+                            .graphicsLayer { alpha = posterFade }
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(

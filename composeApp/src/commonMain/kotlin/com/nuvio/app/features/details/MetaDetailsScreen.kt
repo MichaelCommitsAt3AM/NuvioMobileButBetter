@@ -57,6 +57,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -157,6 +158,8 @@ import com.nuvio.app.features.tracking.toggleTrackingLibraryMembership
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.TrackingProviderId
 import com.nuvio.app.features.tracking.TrackingRatings
+import com.nuvio.app.features.details.components.rememberHeroTrailerAutoplayBlocked
+import com.nuvio.app.features.trailer.HeroTrailerResolver
 import com.nuvio.app.features.trailer.TrailerPlaybackResolver
 import com.nuvio.app.features.trailer.TrailerPlaybackSource
 import com.nuvio.app.features.watched.WatchedRepository
@@ -741,7 +744,7 @@ fun MetaDetailsScreen(
                 var trailerRequestToken by remember(meta.id) { mutableIntStateOf(0) }
                 var isLeavingDetails by remember(meta.id) { mutableStateOf(false) }
                 val heroTrailerCandidate = remember(meta.trailers) {
-                    selectHeroTrailer(meta.trailers)
+                    selectOriginalTrailer(meta.trailers)
                 }
                 val heroTrailerPlaybackEnabled = AppFeaturePolicy.heroTrailerPlaybackSupported &&
                     inAppTrailerPlaybackEnabled &&
@@ -749,32 +752,22 @@ fun MetaDetailsScreen(
                 var heroTrailerPlaybackSource by remember(meta.id, heroTrailerCandidate?.id) { mutableStateOf<TrailerPlaybackSource?>(null) }
                 var heroTrailerReady by remember(meta.id, heroTrailerCandidate?.id) { mutableStateOf(false) }
                 var heroTrailerFinished by remember(meta.id, heroTrailerCandidate?.id) { mutableStateOf(false) }
+                var heroTrailerState by remember(meta.id, heroTrailerCandidate?.id) { mutableStateOf(HeroTrailerPlaybackState.Idle) }
+                var heroTrailerAutoplayDelayElapsed by remember(meta.id) { mutableStateOf(false) }
+                // Set when the user taps the "Trailer" badge shown instead of autoplay.
+                var heroTrailerUserRequested by remember(meta.id) { mutableStateOf(false) }
+                // Kept here (not in the hero) so scrolling the hero off screen and back resumes where it was.
+                // A plain holder, not state: progress ticks several times a second and must not recompose the screen.
+                val heroTrailerResume = remember(meta.id) { LongArray(1) }
+                var heroTrailerUserPaused by remember(meta.id) { mutableStateOf(false) }
                 val heroTrailerMuted by HeroTrailerAudioState.muted.collectAsStateWithLifecycle()
-                LaunchedEffect(
-                    heroTrailerPlaybackEnabled,
-                    heroTrailerCandidate?.id,
-                    heroTrailerCandidate?.key,
-                    deferredMetaWorkAllowed,
-                ) {
-                    heroTrailerPlaybackSource = null
-                    heroTrailerReady = false
-                    heroTrailerFinished = false
-                    if (!deferredMetaWorkAllowed || !heroTrailerPlaybackEnabled || heroTrailerCandidate == null) {
-                        return@LaunchedEffect
-                    }
-                    val resolvedSource = runCatching {
-                        TrailerPlaybackResolver.resolveFromYouTubeUrl(heroTrailerCandidate.youtubePlaybackUrl())
-                    }.getOrNull()
-                    if (resolvedSource == null) {
-                        heroTrailerFinished = true
-                    } else {
-                        heroTrailerPlaybackSource = resolvedSource
-                    }
-                }
                 val onBackFromDetails: () -> Unit = {
                     isLeavingDetails = true
                     heroTrailerReady = false
+                    heroTrailerState = heroTrailerState.onEnded()
                     heroTrailerFinished = true
+                    // Leaving the details flow: the trailer plays again on the next visit.
+                    HeroTrailerPlaybackMemory.clear()
                     onBack()
                 }
                 val resolveTrailer: (MetaTrailer) -> Unit = remember(meta.id, inAppTrailerPlaybackEnabled, uriHandler) {
@@ -836,6 +829,61 @@ fun MetaDetailsScreen(
                         else -> playText
                     }
                 }
+                // Fork-only: no autoplay for a title already in progress (the primary button says
+                // Resume) or when the device asks for less data or motion. The poster then shows a
+                // "Trailer" badge, and tapping it plays the trailer.
+                val titleInProgress = playButtonLabel == resumeText ||
+                    ((meta.type == "series" || hasEpisodes) && (seriesAction?.resumePositionMs ?: 0L) > 0L)
+                val deviceBlocksAutoplay = rememberHeroTrailerAutoplayBlocked()
+                val heroTrailerAutoplayBlocked = (titleInProgress || deviceBlocksAutoplay) && !heroTrailerUserRequested
+                LaunchedEffect(meta.id) {
+                    heroTrailerAutoplayDelayElapsed = false
+                    delay(HeroTrailerPlaybackConfig.AUTOPLAY_DELAY_MS)
+                    heroTrailerAutoplayDelayElapsed = true
+                }
+                LaunchedEffect(
+                    heroTrailerPlaybackEnabled,
+                    heroTrailerCandidate?.id,
+                    heroTrailerCandidate?.key,
+                    deferredMetaWorkAllowed,
+                    heroTrailerAutoplayBlocked,
+                ) {
+                    heroTrailerPlaybackSource = null
+                    heroTrailerReady = false
+                    heroTrailerState = HeroTrailerPlaybackState.Idle
+                    // A trailer that already played to the end in this details flow stays finished
+                    // when coming back from the streams screen or player.
+                    heroTrailerFinished = HeroTrailerPlaybackMemory.isFinished(meta.id)
+                    val heroLog = Logger.withTag("HeroTrailer")
+                    heroLog.d {
+                        "effect meta=${meta.id} settingOn=${metaScreenSettingsUiState.heroTrailerPlayback} " +
+                            "policySupported=${AppFeaturePolicy.heroTrailerPlaybackSupported} inApp=$inAppTrailerPlaybackEnabled " +
+                            "enabled=$heroTrailerPlaybackEnabled deferredAllowed=$deferredMetaWorkAllowed " +
+                            "trailers=${meta.trailers.size} candidate=${heroTrailerCandidate?.key} " +
+                            "finishedBefore=$heroTrailerFinished blocked=$heroTrailerAutoplayBlocked " +
+                            "inProgress=$titleInProgress deviceBlocks=$deviceBlocksAutoplay"
+                    }
+                    if (!deferredMetaWorkAllowed || !heroTrailerPlaybackEnabled || heroTrailerCandidate == null ||
+                        heroTrailerFinished || heroTrailerAutoplayBlocked
+                    ) {
+                        heroLog.d { "skipped: not resolving" }
+                        return@LaunchedEffect
+                    }
+                    val resolvedSource = HeroTrailerResolver.resolve(heroTrailerCandidate.youtubePlaybackUrl())
+                    heroLog.d {
+                        "resolved meta=${meta.id} ok=${resolvedSource != null} separateAudio=${!resolvedSource?.audioUrl.isNullOrBlank()}"
+                    }
+                    if (resolvedSource == null) {
+                        heroTrailerFinished = true
+                        heroTrailerState = heroTrailerState.onEnded()
+                    } else {
+                        heroTrailerPlaybackSource = resolvedSource
+                    }
+                }
+                val showHeroTrailerPlayBadge = heroTrailerPlaybackEnabled &&
+                    heroTrailerCandidate != null &&
+                    heroTrailerAutoplayBlocked &&
+                    !heroTrailerFinished
                 val onPrimaryPlayClick: () -> Unit = {
                     when {
                         shufflePoolEmpty -> showShuffle = true
@@ -1042,6 +1090,24 @@ fun MetaDetailsScreen(
                             (listState.firstVisibleItemIndex > 0 || detailScrollOffsetPx() > thresholdPx)
                     }
                 }
+                // Fork-only: how far the hero has scrolled, as a share of its height. Pauses the
+                // trailer past 30% and resumes it (from where it stopped) once back above ~22%.
+                val heroScrollFraction: () -> Float = {
+                    val measuredHeroHeightPx = heroHeightPx.intValue
+                    if (measuredHeroHeightPx <= 0) 0f else (detailScrollOffsetPx() / measuredHeroHeightPx).coerceAtLeast(0f)
+                }
+                // Keyed on the trailer too: heroTrailerState is re-created when the chosen trailer changes
+                // (metadata enrichment adds trailers), and a stale effect would keep writing to the old one.
+                LaunchedEffect(listState, heroHeightPx, meta.id, heroTrailerCandidate?.id) {
+                    snapshotFlow { heroScrollFraction() }.collect { fraction ->
+                        val next = heroTrailerState.onScroll(fraction)
+                        if (next != heroTrailerState) {
+                            Logger.withTag("HeroTrailer").d { "scroll fraction=$fraction state ${heroTrailerState} -> $next" }
+                        }
+                        heroTrailerState = next
+                    }
+                }
+                val heroTrailerShown = heroTrailerState.showsTrailer && heroTrailerAutoplayDelayElapsed
                 val heroTrailerSourceUrl = heroTrailerPlaybackSource
                     ?.videoUrl
                     ?.takeIf { it.isNotBlank() && heroTrailerPlaybackEnabled && !heroTrailerFinished && !isLeavingDetails }
@@ -1118,7 +1184,8 @@ fun MetaDetailsScreen(
                         heroTrailerSourceUrl != null &&
                             selectedTrailer == null &&
                             !isLeavingDetails &&
-                            !isHeroCollapsed.value
+                            heroTrailerAutoplayDelayElapsed &&
+                            heroTrailerState.wantsPlayback
                     }
                     val onBackdropLoaded: (Painter, ImageBitmap?) -> Unit = { painter, imageBitmap ->
                         dominantBackdropPainter = painter
@@ -1127,11 +1194,15 @@ fun MetaDetailsScreen(
                     val onHeroTrailerReady: () -> Unit = {
                         if (!heroTrailerFinished) {
                             heroTrailerReady = true
+                            heroTrailerState = heroTrailerState.onReady(heroScrollFraction())
+                            Logger.withTag("HeroTrailer").d { "ready -> state=$heroTrailerState" }
                         }
                     }
                     val onHeroTrailerFinished: () -> Unit = {
                         heroTrailerReady = false
                         heroTrailerFinished = true
+                        HeroTrailerPlaybackMemory.markFinished(meta.id)
+                        heroTrailerState = heroTrailerState.onEnded()
                     }
                     val isSectionEnabled = { key: MetaScreenSectionKey ->
                         metaScreenSettingsUiState.items.any { it.key == key && it.enabled }
@@ -1148,7 +1219,7 @@ fun MetaDetailsScreen(
                                     heroHeightPx = { heroHeightPx.intValue },
                                     heroTrailerSourceUrl = heroTrailerSourceUrl,
                                     heroTrailerSourceAudioUrl = heroTrailerSourceAudioUrl,
-                                    heroTrailerReady = heroTrailerReady,
+                                    heroTrailerReady = heroTrailerShown,
                                     heroTrailerPlayWhenReady = heroTrailerPlayWhenReady,
                                     heroTrailerMuted = heroTrailerMuted,
                                     heroGradientColor = heroGradientColor,
@@ -1186,7 +1257,7 @@ fun MetaDetailsScreen(
                                                 isMdbListActive = mdbListSettings.isActive,
                                                 horizontalPadding = contentHorizontalPadding,
                                                 heroTrailerSourceUrl = heroTrailerSourceUrl,
-                                                heroTrailerReady = heroTrailerReady,
+                                                heroTrailerReady = heroTrailerShown,
                                                 heroTrailerMuted = heroTrailerMuted,
                                                 onHeroTrailerMuteToggle = HeroTrailerAudioState::toggleMuted,
                                                 onHeightChanged = { heroHeightPx.intValue = it },
@@ -1221,7 +1292,7 @@ fun MetaDetailsScreen(
                                                 onHeightChanged = { heroHeightPx.intValue = it },
                                                 heroTrailerSourceUrl = heroTrailerSourceUrl,
                                                 heroTrailerSourceAudioUrl = heroTrailerSourceAudioUrl,
-                                                heroTrailerReady = heroTrailerReady,
+                                                heroTrailerReady = heroTrailerShown,
                                                 heroTrailerPlayWhenReady = heroTrailerPlayWhenReady,
                                                 heroTrailerMuted = heroTrailerMuted,
                                                 heroGradientColor = heroGradientColor,
@@ -1231,6 +1302,12 @@ fun MetaDetailsScreen(
                                                 onHeroTrailerReady = onHeroTrailerReady,
                                                 onHeroTrailerEnded = onHeroTrailerFinished,
                                                 onHeroTrailerError = onHeroTrailerFinished,
+                                                heroTrailerPlayBadgeVisible = showHeroTrailerPlayBadge,
+                                                onHeroTrailerPlayBadgeClick = { heroTrailerUserRequested = true },
+                                                heroTrailerStartPositionMs = heroTrailerResume[0],
+                                                heroTrailerUserPaused = heroTrailerUserPaused,
+                                                onHeroTrailerUserPausedToggle = { heroTrailerUserPaused = !heroTrailerUserPaused },
+                                                onHeroTrailerProgress = { position, _ -> heroTrailerResume[0] = position },
                                             )
                                         }
                                     }
@@ -2444,7 +2521,7 @@ private fun ConfiguredMetaSections(
             MetaScreenSectionKey.TRAILERS -> {
                 if (hasTrailersSection) {
                     DetailTrailersSection(
-                        trailers = meta.trailers,
+                        trailers = remember(meta.trailers) { meta.trailers.sortedWith(originalTrailerFirst) },
                         onTrailerClick = onTrailerClick,
                         showHeader = showHeader,
                         horizontalScrollPadding = horizontalScrollPadding,

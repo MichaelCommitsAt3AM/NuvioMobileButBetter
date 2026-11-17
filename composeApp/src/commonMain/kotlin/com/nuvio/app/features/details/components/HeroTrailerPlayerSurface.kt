@@ -9,8 +9,12 @@ expect fun HeroTrailerPlayerSurface(
     sourceAudioUrl: String?,
     playWhenReady: Boolean,
     muted: Boolean,
+    startPositionMs: Long,
+    seekRequest: com.nuvio.app.features.details.HeroTrailerSeekRequest?,
     modifier: Modifier,
     onReady: () -> Unit,
     onEnded: () -> Unit,
+    onProgress: (positionMs: Long, durationMs: Long) -> Unit,
+    onBufferingChanged: (Boolean) -> Unit,
     onError: () -> Unit,
 )

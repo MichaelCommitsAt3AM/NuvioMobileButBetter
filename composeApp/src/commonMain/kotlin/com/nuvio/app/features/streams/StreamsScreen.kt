@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -74,7 +75,9 @@ import com.nuvio.app.core.ui.dismissNuvioBottomSheet
 import com.nuvio.app.core.ui.featherArtwork
 import com.nuvio.app.core.ui.rememberArtworkBackdrop
 import com.nuvio.app.features.downloads.DownloadFilterResult
+import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.downloads.DownloadFilterSettingsRepository
+import com.nuvio.app.features.downloads.DownloadRuntimeResolver
 import com.nuvio.app.features.downloads.DownloadStreamFilter
 import com.nuvio.app.features.downloads.DownloadStreamFilterMode
 import com.nuvio.app.features.downloads.DownloadsRepository
@@ -729,9 +732,13 @@ internal fun StreamList(
         DownloadFilterSettingsRepository.ensureLoaded()
         DownloadFilterSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
-    val filterResult = remember(baseGroups, isDataSaver, downloadFilterConfig) {
+    val metaDetailsState by MetaDetailsRepository.uiState.collectAsStateWithLifecycle()
+    val runtimeSeconds = remember(metaDetailsState.meta, uiState.contentVideoId) {
+        DownloadRuntimeResolver.runtimeSeconds(metaDetailsState.meta, uiState.contentVideoId)
+    }
+    val filterResult = remember(baseGroups, isDataSaver, downloadFilterConfig, runtimeSeconds) {
         if (isDataSaver) {
-            DownloadStreamFilter.apply(baseGroups, downloadFilterConfig)
+            DownloadStreamFilter.apply(baseGroups, downloadFilterConfig, runtimeSeconds)
         } else {
             DownloadFilterResult(baseGroups, 0)
         }
@@ -751,8 +758,19 @@ internal fun StreamList(
         StreamBadgeSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
 
+    val listState = rememberLazyListState()
+    // As on TV, picking another addon filter starts at the top of its results. Only a change of
+    // filter does it, so the position kept when coming back from the player stays.
+    var shownFilter by remember { mutableStateOf(uiState.selectedFilter) }
+    LaunchedEffect(uiState.selectedFilter) {
+        if (uiState.selectedFilter == shownFilter) return@LaunchedEffect
+        shownFilter = uiState.selectedFilter
+        listState.scrollToItem(0)
+    }
+
     CompositionLocalProvider(LocalStreamSizeLabelFormat provides formatStreamSize) {
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(
             horizontal = 12.dp,
