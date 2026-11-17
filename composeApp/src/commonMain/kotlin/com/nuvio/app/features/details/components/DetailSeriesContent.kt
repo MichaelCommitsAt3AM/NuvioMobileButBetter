@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.Box
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -63,8 +65,13 @@ import coil3.compose.AsyncImage
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.core.format.formatShortReleaseDateForDisplay
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
 import com.nuvio.app.core.ui.NuvioAnimatedWatchedBadge
+import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.EpisodeDownloadButton
+import com.nuvio.app.features.downloads.forEpisode
+import com.nuvio.app.features.downloads.rememberTitleDownloads
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.backdropControlColor
@@ -112,9 +119,12 @@ fun DetailSeriesContent(
     onEpisodeClick: ((MetaVideo) -> Unit)? = null,
     onEpisodeLongPress: ((MetaVideo) -> Unit)? = null,
     onSeasonLongPress: ((Int) -> Unit)? = null,
+    /** Tapping the download button on an episode card (shown only for an episode with a download). */
+    onEpisodeDownload: ((MetaVideo) -> Unit)? = null,
 ) {
     val hasVideos = meta.videos.isNotEmpty()
     if (meta.type != "series" && !hasVideos) return
+    val titleDownloads = rememberTitleDownloads(meta.type, meta.id)
 
     if (meta.videos.isEmpty()) {
         DetailSection(
@@ -236,6 +246,7 @@ fun DetailSeriesContent(
                             ),
                             onEpisodeClick = onEpisodeClick,
                             onEpisodeLongPress = onEpisodeLongPress,
+                            onEpisodeDownload = onEpisodeDownload,
                         )
                     } else {
                         Column(
@@ -263,6 +274,8 @@ fun DetailSeriesContent(
                                     episodeRatingsVisibility = episodeRatingsVisibility,
                                     blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                                     sizing = sizing,
+                                    download = titleDownloads.forEpisode(episode),
+                                    onDownloadClick = onEpisodeDownload?.let { { it(episode) } },
                                     onClick = { onEpisodeClick?.invoke(episode) },
                                     onLongPress = { onEpisodeLongPress?.invoke(episode) },
                                 )
@@ -324,6 +337,7 @@ internal fun DetailSeriesListEpisode(
     onEpisodeClick: ((MetaVideo) -> Unit)?,
     onEpisodeLongPress: ((MetaVideo) -> Unit)?,
     modifier: Modifier = Modifier,
+    onEpisodeDownload: ((MetaVideo) -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val sizing = seriesContentSizing(maxWidth.value)
@@ -348,6 +362,8 @@ internal fun DetailSeriesListEpisode(
             episodeRatingsVisibility = episodeRatingsVisibility,
             blurUnwatchedEpisodes = blurUnwatchedEpisodes,
             sizing = sizing,
+            download = rememberTitleDownloads(meta.type, meta.id).forEpisode(episode),
+            onDownloadClick = onEpisodeDownload?.let { { it(episode) } },
             onClick = { onEpisodeClick?.invoke(episode) },
             onLongPress = { onEpisodeLongPress?.invoke(episode) },
         )
@@ -713,8 +729,10 @@ private fun EpisodeHorizontalRow(
     preferredEpisodeNumber: Int? = null,
     onEpisodeClick: ((MetaVideo) -> Unit)?,
     onEpisodeLongPress: ((MetaVideo) -> Unit)?,
+    onEpisodeDownload: ((MetaVideo) -> Unit)? = null,
 ) {
     val rowMetrics = rememberEpisodeHorizontalCardMetrics(maxWidthDp)
+    val titleDownloads = rememberTitleDownloads(metaType, parentMetaId)
     val listState = rememberLazyListState()
     var hasPositioned by remember(episodes) { mutableStateOf(false) }
 
@@ -770,6 +788,8 @@ private fun EpisodeHorizontalRow(
                 episodeRatingsVisibility = episodeRatingsVisibility,
                 blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                 metrics = rowMetrics,
+                download = titleDownloads.forEpisode(episode),
+                onDownloadClick = onEpisodeDownload?.let { { it(episode) } },
                 onClick = { onEpisodeClick?.invoke(episode) },
                 onLongPress = { onEpisodeLongPress?.invoke(episode) },
             )
@@ -788,6 +808,8 @@ private fun EpisodeHorizontalCard(
     episodeRatingsVisibility: EpisodeRatingsVisibility,
     blurUnwatchedEpisodes: Boolean,
     metrics: EpisodeHorizontalCardMetrics,
+    download: DownloadItem? = null,
+    onDownloadClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
@@ -873,7 +895,8 @@ private fun EpisodeHorizontalCard(
                 .fillMaxWidth()
                 .padding(
                     start = metrics.contentPadding,
-                    end = metrics.contentPadding,
+                    // Keep the text clear of the download button in the bottom-right corner.
+                    end = metrics.contentPadding + if (download != null) EpisodeDownloadButtonSize + 8.dp else 0.dp,
                     top = metrics.contentPadding,
                     bottom = contentBottomPadding,
                 ),
@@ -964,6 +987,17 @@ private fun EpisodeHorizontalCard(
                 height = progressBarHeight,
                 trackColor = Color.White.copy(alpha = 0.22f),
                 fillColor = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        download?.let { item ->
+            EpisodeDownloadButton(
+                item = item,
+                onClick = onDownloadClick,
+                size = EpisodeDownloadButtonSize,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = metrics.contentPadding, bottom = contentBottomPadding),
             )
         }
     }
@@ -1170,7 +1204,7 @@ private fun ImdbEpisodeRatingBadge(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun EpisodeListCard(
     video: MetaVideo,
@@ -1182,6 +1216,8 @@ private fun EpisodeListCard(
     blurUnwatchedEpisodes: Boolean,
     sizing: SeriesContentSizing,
     modifier: Modifier = Modifier,
+    download: DownloadItem? = null,
+    onDownloadClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
@@ -1191,7 +1227,7 @@ private fun EpisodeListCard(
         imdbRating?.takeIf { it > 0.0 && episodeRatingsVisibility.showRating(isWatched) }
             ?.let(::formatEpisodeRating)
     }
-    val formattedDate = remember(video.released) { video.released?.let { formatReleaseDateForDisplay(it) } }
+    val formattedDate = remember(video.released) { video.released?.let { formatShortReleaseDateForDisplay(it) } }
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1299,9 +1335,12 @@ private fun EpisodeListCard(
                 )
 
                 if (formattedDate != null || ratingLabel != null) {
-                    Row(
+                    // Wraps the rating under the date when the line is too narrow (e.g. beside the download button),
+                    // instead of cutting it off.
+                    FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        itemVerticalAlignment = Alignment.CenterVertically,
                     ) {
                         formattedDate?.let { date ->
                             Text(
@@ -1338,6 +1377,17 @@ private fun EpisodeListCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+
+            download?.let { item ->
+                EpisodeDownloadButton(
+                    item = item,
+                    onClick = onDownloadClick,
+                    size = EpisodeDownloadButtonSize,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .padding(end = sizing.contentHorizontalPadding),
+                )
             }
         }
 
@@ -1534,3 +1584,6 @@ private fun formatEpisodeRating(rating: Double): String {
     val tenth = (roundedTenths % 10).absoluteValue
     return "$whole.$tenth"
 }
+
+/** The download button on the right of an episode card, matching the movie Download button's look. */
+private val EpisodeDownloadButtonSize = 38.dp

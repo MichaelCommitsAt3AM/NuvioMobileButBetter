@@ -14,11 +14,13 @@ import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.tmdb.TmdbEntityKind
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.navigation.DetailRoute
+import com.nuvio.app.navigation.DownloadsRoute
 import com.nuvio.app.navigation.EntityBrowseRoute
 import com.nuvio.app.navigation.NuvioNavigator
 import com.nuvio.app.navigation.PersonDetailRoute
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.compose_settings_root_downloads_title
 import nuvio.composeapp.generated.resources.person_role_creator
 import nuvio.composeapp.generated.resources.person_role_director
 import nuvio.composeapp.generated.resources.person_role_writer
@@ -78,10 +80,12 @@ internal fun DetailsDestination(
     val directorRole = stringResource(Res.string.person_role_director)
     val writerRole = stringResource(Res.string.person_role_writer)
     val creatorRole = stringResource(Res.string.person_role_creator)
+    val downloadsTitle = stringResource(Res.string.compose_settings_root_downloads_title)
     MetaDetailsScreen(
         type = route.type,
         id = route.id,
         onBack = onBack,
+        onOpenDownloads = { navController.navigate(DownloadsRoute(downloadsTitle)) },
         onPlay = onPlay,
         onPlayManually = onPlayManually,
         onOpenMeta = onOpenMeta,

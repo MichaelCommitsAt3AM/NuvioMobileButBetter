@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material.icons.filled.Add
@@ -123,6 +124,12 @@ import com.nuvio.app.features.details.components.RatingSheet
 import com.nuvio.app.features.details.components.formatRating
 import com.nuvio.app.features.details.components.ratingReference
 import com.nuvio.app.features.details.components.rememberRatingState
+import com.nuvio.app.features.downloads.DownloadStatus
+import com.nuvio.app.features.downloads.DownloadsRepository
+import com.nuvio.app.features.downloads.isInProgress
+import com.nuvio.app.features.downloads.QualityDownloadSheet
+import com.nuvio.app.features.downloads.forEpisode
+import com.nuvio.app.features.downloads.rememberTitleDownloads
 import com.nuvio.app.features.details.components.SeasonWatchedActionSheet
 import com.nuvio.app.features.details.components.TabletArtworkBackdropAlignment
 import com.nuvio.app.features.details.components.TabletDetailBackdrop
@@ -196,6 +203,8 @@ fun MetaDetailsScreen(
     onOpenMeta: ((MetaPreview) -> Unit)? = null,
     onCastClick: ((MetaPerson, String?) -> Unit)? = null,
     onCompanyClick: ((MetaCompany, String) -> Unit)? = null,
+    /** Opens the Downloads screen, e.g. from a download button while that download is running. */
+    onOpenDownloads: (() -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier,
@@ -262,6 +271,16 @@ fun MetaDetailsScreen(
     var selectedEpisodeForActions by remember(type, id) { mutableStateOf<MetaVideo?>(null) }
     var selectedEpisodeZoomAnchor by remember(type, id) { mutableStateOf<PosterZoomAnchor?>(null) }
     var episodeToRate by remember(type, id) { mutableStateOf<MetaVideo?>(null) }
+    var episodeToDownload by remember(type, id) { mutableStateOf<MetaVideo?>(null) }
+    val downloadItems by DownloadsRepository.visibleUiState.collectAsStateWithLifecycle()
+    // While an episode is downloading, its download button leads to the Downloads screen instead of the sheet.
+    val openEpisodeDownload: (MetaVideo) -> Unit = { video ->
+        val running = downloadItems.items
+            .filter { it.parentMetaId == id && it.parentMetaType == type }
+            .forEpisode(video)
+            ?.isInProgress == true
+        if (running && onOpenDownloads != null) onOpenDownloads() else episodeToDownload = video
+    }
     val episodeOverlayHazeState = rememberHazeState()
     var selectedSeasonForActions by remember(type, id) { mutableStateOf<Int?>(null) }
     val commentsEnabled by remember {
@@ -1276,6 +1295,7 @@ fun MetaDetailsScreen(
                                                             onWatchedClick = toggleWatched,
                                                             onSaveClick = toggleSaved,
                                                             onSaveLongClick = openLibraryListPicker,
+                                                            onOpenDownloads = onOpenDownloads,
                                                         )
                                                     }
                                                 } else {
@@ -1400,6 +1420,8 @@ fun MetaDetailsScreen(
                                             selectedEpisodeForActions = video
                                         },
                                         onSeasonLongPress = { season -> selectedSeasonForActions = season },
+                                        onEpisodeDownload = { video -> openEpisodeDownload(video) },
+                                        onOpenDownloads = onOpenDownloads,
                                         onOpenMeta = onOpenMeta,
                                         onCastClick = onCastClick,
                                         onCompanyClick = onCompanyClick,
@@ -1537,6 +1559,10 @@ fun MetaDetailsScreen(
                                     onEpisodeManualPlayClick(selectedEpisode)
                                 },
                                 ratingMedia = remember(meta, selectedEpisode) { meta.ratingReference(selectedEpisode) },
+                                download = rememberTitleDownloads(meta.type, meta.id).forEpisode(selectedEpisode),
+                                onDownload = { openEpisodeDownload(selectedEpisode) }.takeIf {
+                                    meta.releasedPlayableEpisodes(todayIsoDate).any { it.id == selectedEpisode.id }
+                                },
                             )
                         }
 
@@ -1786,6 +1812,10 @@ fun MetaDetailsScreen(
             val seasonLabel = selectedEpisode.season?.let {
                 stringResource(Res.string.episodes_season, it)
             } ?: stringResource(Res.string.episodes_specials)
+            val selectedEpisodeDownload = rememberTitleDownloads(meta.type, meta.id).forEpisode(selectedEpisode)
+            val canDownloadSelectedEpisode = remember(meta, selectedEpisode, todayIsoDate) {
+                meta.releasedPlayableEpisodes(todayIsoDate).any { it.id == selectedEpisode.id }
+            }
             val episodeRating = remember(meta, selectedEpisode) {
                 TrackingRatings.current(meta.ratingReference(selectedEpisode))
             }
@@ -1851,6 +1881,21 @@ fun MetaDetailsScreen(
                             },
                         ),
                     )
+                    if (canDownloadSelectedEpisode) {
+                        add(
+                            PosterZoomOverlayAction(
+                                icon = Icons.Rounded.Download,
+                                label = stringResource(
+                                    when {
+                                        selectedEpisodeDownload?.isInProgress == true -> Res.string.episode_download_view
+                                        selectedEpisodeDownload?.status == DownloadStatus.Completed -> Res.string.episode_download_again
+                                        else -> Res.string.episode_download
+                                    },
+                                ),
+                                onSelected = { openEpisodeDownload(selectedEpisode) },
+                            ),
+                        )
+                    }
                     if (episodeRating.isAvailable) {
                         val rated = episodeRating.rating
                         add(
@@ -1910,6 +1955,19 @@ fun MetaDetailsScreen(
                     selectedEpisodeForActions = null
                     selectedEpisodeZoomAnchor = null
                 },
+            )
+        }
+
+        val downloadingEpisode = episodeToDownload
+        if (meta != null && downloadingEpisode != null) {
+            QualityDownloadSheet(
+                meta = meta,
+                videoId = downloadingEpisode.id,
+                subtitle = listOfNotNull(
+                    localizedSeasonEpisodeCode(downloadingEpisode.season, downloadingEpisode.episode),
+                    localizedEpisodeTitle(downloadingEpisode.title, downloadingEpisode.episode) ?: downloadingEpisode.title,
+                ).joinToString(" · "),
+                onDismiss = { episodeToDownload = null },
             )
         }
 
@@ -2109,6 +2167,8 @@ private fun LazyListScope.configuredMetaSectionItems(
     onEpisodeClick: (MetaVideo) -> Unit,
     onEpisodeLongPress: (MetaVideo) -> Unit,
     onSeasonLongPress: (Int) -> Unit,
+    onEpisodeDownload: ((MetaVideo) -> Unit)? = null,
+    onOpenDownloads: (() -> Unit)? = null,
     onOpenMeta: ((MetaPreview) -> Unit)?,
     onCastClick: ((MetaPerson, String?) -> Unit)?,
     onCompanyClick: ((MetaCompany, String) -> Unit)?,
@@ -2191,6 +2251,8 @@ private fun LazyListScope.configuredMetaSectionItems(
                     blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                     onEpisodeClick = onEpisodeClick,
                     onEpisodeLongPress = onEpisodeLongPress,
+                    onEpisodeDownload = onEpisodeDownload,
+                    onOpenDownloads = onOpenDownloads,
                     onSeasonLongPress = onSeasonLongPress,
                     onOpenMeta = onOpenMeta,
                     onCastClick = onCastClick,
@@ -2249,6 +2311,7 @@ private fun LazyListScope.configuredMetaSectionItems(
                     blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                     onEpisodeClick = onEpisodeClick,
                     onEpisodeLongPress = onEpisodeLongPress,
+                    onEpisodeDownload = onEpisodeDownload,
                 )
             }
         }
@@ -2423,6 +2486,8 @@ private fun ConfiguredMetaSections(
     onEpisodeClick: (MetaVideo) -> Unit,
     onEpisodeLongPress: (MetaVideo) -> Unit,
     onSeasonLongPress: (Int) -> Unit,
+    onEpisodeDownload: ((MetaVideo) -> Unit)? = null,
+    onOpenDownloads: (() -> Unit)? = null,
     onOpenMeta: ((MetaPreview) -> Unit)?,
     onCastClick: ((MetaPerson, String?) -> Unit)?,
     onCompanyClick: ((MetaCompany, String) -> Unit)?,
@@ -2477,6 +2542,7 @@ private fun ConfiguredMetaSections(
                     onWatchedClick = onWatchedClick,
                     onSaveClick = onSaveClick,
                     onSaveLongClick = onSaveLongClick,
+                    onOpenDownloads = onOpenDownloads,
                 )
             }
             MetaScreenSectionKey.OVERVIEW -> {
@@ -2544,6 +2610,7 @@ private fun ConfiguredMetaSections(
                         blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                         onEpisodeClick = onEpisodeClick,
                         onEpisodeLongPress = onEpisodeLongPress,
+                        onEpisodeDownload = onEpisodeDownload,
                         onSeasonLongPress = onSeasonLongPress,
                     )
                 }

@@ -108,4 +108,10 @@ class ReleaseDateDisplayTest {
         TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
         assertEquals("January 31, 2025", formatReleaseDate("2025-02-01T01:00:00Z", true, "en-US"))
     }
+
+    @Test
+    fun shortMonthAbbreviatesTheMonthForTightLayouts() {
+        assertEquals("Oct 13, 2026", formatReleaseDate("2026-10-13", true, "en-US", shortMonth = true))
+        assertEquals("13 Oct 2026", formatReleaseDate("2026-10-13", true, "en-GB", shortMonth = true))
+    }
 }

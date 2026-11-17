@@ -1,5 +1,6 @@
 package com.nuvio.app.features.downloads
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -46,6 +47,7 @@ import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.download_quality_desc
 import nuvio.composeapp.generated.resources.download_quality_error
+import nuvio.composeapp.generated.resources.download_quality_large_file
 import nuvio.composeapp.generated.resources.download_quality_loading
 import nuvio.composeapp.generated.resources.download_quality_none_fit
 import nuvio.composeapp.generated.resources.download_quality_none_found
@@ -75,19 +77,23 @@ private sealed interface QualitySheetPhase {
 fun QualityDownloadSheet(
     meta: MetaDetails,
     onDismiss: () -> Unit,
+    /** The episode's video id for a series; the title itself for a movie. */
+    videoId: String = meta.id,
+    /** Names what is being downloaded, e.g. "S2 E5 · Episode title". */
+    subtitle: String? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val dismiss: () -> Unit = {
         scope.launch { dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss) }
     }
-    var phase by remember(meta.type, meta.id) { mutableStateOf<QualitySheetPhase>(QualitySheetPhase.Loading) }
+    var phase by remember(meta.type, meta.id, videoId) { mutableStateOf<QualitySheetPhase>(QualitySheetPhase.Loading) }
     var startingTier by remember { mutableStateOf<StreamResolutionTier?>(null) }
 
-    LaunchedEffect(meta.type, meta.id) {
+    LaunchedEffect(meta.type, meta.id, videoId) {
         phase = QualitySheetPhase.Loading
         phase = try {
-            QualitySheetPhase.Ready(DownloadQualityOptionsLoader.load(meta.type, meta.id))
+            QualitySheetPhase.Ready(DownloadQualityOptionsLoader.load(meta.type, meta.id, videoId))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -111,6 +117,7 @@ fun QualityDownloadSheet(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
+            if (subtitle != null) Message(subtitle)
             // Grow to the new height and crossfade when the options arrive, instead of snapping.
             AnimatedContent(
                 targetState = phase,
@@ -153,9 +160,16 @@ fun QualityDownloadSheet(
                                 val sizeUnknown = stringResource(Res.string.download_quality_size_unknown)
                                 val starting = stringResource(Res.string.download_quality_starting)
                                 result.options.forEach { option ->
+                                    // Every stream of this quality is over the data saver budget: the smallest is offered anyway.
+                                    val tierName = stringResource(tierSubtitle(option.tier))
                                     QualityOptionRow(
                                         title = tierTitle(option.tier, option.hdr),
-                                        subtitle = stringResource(tierSubtitle(option.tier)),
+                                        subtitle = if (option.overBudget) {
+                                            stringResource(Res.string.download_quality_large_file, tierName)
+                                        } else {
+                                            tierName
+                                        },
+                                        subtitleColor = if (option.overBudget) LargeFileColor else null,
                                         trailing = if (startingTier == option.tier) {
                                             starting
                                         } else {
@@ -197,6 +211,7 @@ private fun Message(text: String) {
 private fun QualityOptionRow(
     title: String,
     subtitle: String,
+    subtitleColor: Color? = null,
     trailing: String,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -220,7 +235,7 @@ private fun QualityOptionRow(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = subtitleColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Text(
@@ -296,3 +311,6 @@ private suspend fun startDownload(result: QualityDownloadOptions, option: Qualit
     )
     NuvioToastController.show(enqueued.toastMessage())
 }
+
+/** Amber for a quality offered over the data saver limit, matching the desktop sheet. */
+private val LargeFileColor = Color(0xFFF0B35A)

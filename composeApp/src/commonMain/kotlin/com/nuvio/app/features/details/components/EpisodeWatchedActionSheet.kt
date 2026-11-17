@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAddCheckCircle
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +45,10 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
 import com.nuvio.app.features.details.MetaVideo
+import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.DownloadProgressBadge
+import com.nuvio.app.features.downloads.DownloadStatus
+import com.nuvio.app.features.downloads.isInProgress
 import com.nuvio.app.features.tracking.TrackingMediaReference
 import com.nuvio.app.features.tracking.TrackingRatingState
 import kotlinx.coroutines.launch
@@ -67,6 +72,8 @@ fun EpisodeWatchedActionSheet(
     showPlayManually: Boolean = false,
     onPlayManually: (() -> Unit)? = null,
     ratingMedia: TrackingMediaReference? = null,
+    download: DownloadItem? = null,
+    onDownload: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
@@ -178,6 +185,23 @@ fun EpisodeWatchedActionSheet(
                                     onPlayManually()
                                     dismiss()
                                 },
+                            )
+                        }
+                        if (onDownload != null) {
+                            NuvioBottomSheetActionRow(
+                                icon = Icons.Rounded.Download,
+                                title = stringResource(
+                                    when {
+                                        download?.isInProgress == true -> Res.string.episode_download_view
+                                        download?.status == DownloadStatus.Completed -> Res.string.episode_download_again
+                                        else -> Res.string.episode_download
+                                    },
+                                ),
+                                onClick = {
+                                    onDownload()
+                                    dismiss()
+                                },
+                                trailingContent = download?.let { { DownloadProgressBadge(item = it) } },
                             )
                         }
                     }

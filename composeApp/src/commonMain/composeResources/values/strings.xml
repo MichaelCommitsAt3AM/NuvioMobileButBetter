@@ -650,6 +650,13 @@
     <string name="downloads_status_failed">Failed</string>
     <string name="downloads_status_paused">Paused • %1$s</string>
     <string name="episodes_cd_watched">Watched</string>
+    <string name="episodes_cd_downloaded">Downloaded</string>
+    <string name="episodes_cd_downloading">Downloading, %1$d%%</string>
+    <string name="episodes_cd_download_paused">Download paused, %1$d%%</string>
+    <string name="episodes_cd_download_failed">Download failed</string>
+    <string name="episode_download">Download</string>
+    <string name="episode_download_again">Download again</string>
+    <string name="episode_download_view">View in Downloads</string>
     <string name="episodes_unavailable">Unavailable</string>
     <string name="episodes_season">Season %1$d</string>
     <string name="episodes_specials">Specials</string>
@@ -2477,6 +2484,7 @@
     <string name="download_quality_desc">Pick a quality. Each one is the best balance of picture quality and file size.</string>
     <string name="download_quality_loading">Finding the best versions to download…</string>
     <string name="download_quality_tier_uhd">Ultra HD</string>
+    <string name="download_quality_large_file">%1$s · Large file</string>
     <string name="download_quality_tier_fhd">Full HD</string>
     <string name="download_quality_tier_hd">HD</string>
     <string name="download_quality_size_unknown">Size unknown</string>

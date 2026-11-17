@@ -1,5 +1,12 @@
 package com.nuvio.app.features.details.components
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.LocalContentColor
+import com.nuvio.app.features.downloads.DownloadItem
+import com.nuvio.app.features.downloads.DownloadRing
+import com.nuvio.app.features.downloads.DownloadStatus
+import com.nuvio.app.features.downloads.isInProgress
+import com.nuvio.app.features.downloads.rememberTitleDownload
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -69,6 +76,8 @@ data class DetailSecondaryAction(
     val isActive: Boolean = false,
     val onClick: () -> Unit = {},
     val onLongClick: (() -> Unit)? = null,
+    /** The title's download, shown as a ring around the button while downloading. */
+    val download: DownloadItem? = null,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -252,6 +261,7 @@ fun DetailActionButtons(
                     active = trailingAction.isActive,
                     progress = 1f,
                     size = iconButtonSize,
+                    download = trailingAction.download,
                     onClick = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                         trailingAction.onClick()
@@ -277,6 +287,7 @@ fun DetailActions(
     onWatchedClick: () -> Unit,
     onSaveClick: () -> Unit,
     onSaveLongClick: (() -> Unit)?,
+    onOpenDownloads: (() -> Unit)? = null,
 ) {
     val shuffleAction = onShuffleClick?.let { onClick ->
         DetailSecondaryAction(
@@ -290,6 +301,7 @@ fun DetailActions(
     val downloadMeta = metaState.meta?.takeIf { it.type == "movie" }
     var showDownloadSheet by remember { mutableStateOf(false) }
     val downloadLabel = stringResource(Res.string.details_download_action)
+    val titleDownload = downloadMeta?.let { rememberTitleDownload(it.type, it.id) }
     DetailActionButtons(
         playLabel = if (playEnabled) playLabel else stringResource(Res.string.playback_unavailable),
         playEnabled = playEnabled,
@@ -318,7 +330,12 @@ fun DetailActions(
             DetailSecondaryAction(
                 label = downloadLabel,
                 icon = Icons.Rounded.Download,
-                onClick = { showDownloadSheet = true },
+                isActive = titleDownload?.status == DownloadStatus.Completed,
+                // While the movie is downloading, the ringed button leads to the Downloads screen.
+                onClick = {
+                    if (titleDownload?.isInProgress == true && onOpenDownloads != null) onOpenDownloads() else showDownloadSheet = true
+                },
+                download = titleDownload,
             )
         },
         isTablet = isTablet,
@@ -343,6 +360,7 @@ private fun DetailIconAction(
     modifier: Modifier = Modifier,
     size: Dp,
     onLongClick: (() -> Unit)? = null,
+    download: DownloadItem? = null,
 ) {
     Surface(
         modifier = modifier.graphicsLayer {
@@ -373,10 +391,22 @@ private fun DetailIconAction(
                 ),
             contentAlignment = Alignment.Center,
         ) {
+            if (download?.isInProgress == true) {
+                DownloadRing(
+                    progress = download.progressFraction,
+                    paused = download.status == DownloadStatus.Paused,
+                    strokeWidth = 2.5.dp,
+                )
+            }
             Icon(
                 imageVector = icon,
                 contentDescription = label,
                 modifier = Modifier.size(21.dp),
+                tint = when (download?.status) {
+                    DownloadStatus.Paused -> LocalContentColor.current.copy(alpha = 0.7f)
+                    DownloadStatus.Failed -> Color(0xFFFF8A8A)
+                    else -> LocalContentColor.current
+                },
             )
         }
     }

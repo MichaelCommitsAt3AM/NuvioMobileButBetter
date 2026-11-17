@@ -7,16 +7,20 @@ fun formatReleaseDateForDisplay(raw: String): String = formatReleaseDate(raw, in
 
 fun formatReleaseDateWithoutYear(raw: String): String = formatReleaseDate(raw, includeYear = false)
 
+/** Abbreviated month ("Oct 13, 2026") for tight layouts such as episode cards. */
+fun formatShortReleaseDateForDisplay(raw: String): String = formatReleaseDate(raw, includeYear = true, shortMonth = true)
+
 internal fun formatReleaseDate(
     raw: String,
     includeYear: Boolean,
     localeTag: String = Locale.current.toLanguageTag(),
+    shortMonth: Boolean = false,
 ): String {
     val date = parseEpisodeReleaseLocalDate(raw) ?: return raw
-    return formatCalendarDate(date, localeTag, includeYear)
+    return formatCalendarDate(date, localeTag, includeYear, shortMonth)
 }
 
-internal expect fun formatCalendarDate(isoDate: String, localeTag: String, includeYear: Boolean): String
+internal expect fun formatCalendarDate(isoDate: String, localeTag: String, includeYear: Boolean, shortMonth: Boolean): String
 
 /**
  * Parses a release/air string (ISO date, year-only, or timestamp prefix) for compact UI (e.g. year chips).
