@@ -111,9 +111,6 @@ fun ProfileEditScreen(
     var addonRetry by remember { mutableStateOf(0) }
     var copySettings by rememberSaveable { mutableStateOf(false) }
     var settingsSourceId by rememberSaveable { mutableStateOf<Int?>(null) }
-    var recommendedSubtitles by rememberSaveable { mutableStateOf(true) }
-    var subtitlesLoading by remember { mutableStateOf(!isNew) }
-    var subtitlesError by remember { mutableStateOf<String?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
     val availableProfiles = profileState.profiles.filter { it.profileIndex != savedProfileId }
     val signedIn = !AuthRepository.state.value.isAnonymous
@@ -155,18 +152,6 @@ fun ProfileEditScreen(
             } finally { addonLoading = false }
         } else addonLoading = false
     }
-    LaunchedEffect(profile?.profileIndex) {
-        val id = profile?.profileIndex ?: return@LaunchedEffect
-        try {
-            AddonRepository.flushPendingPushes()
-            recommendedSubtitles = withRecommendedSubtitles(AddonRepository.readProfileAddonSnapshot(id))
-                .first { it.url == RECOMMENDED_SUBTITLES_URL }.enabled
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            subtitlesError = "Could not load subtitle settings. Reopen the profile to retry."
-        } finally { subtitlesLoading = false }
-    }
-
     val customAvatarUrl = remember(avatarUrl) { normalizedAvatarUrl(avatarUrl) }
     val avatarUrlIsInvalid = avatarUrl.isNotBlank() && customAvatarUrl == null
     val selectedAvatarItem = remember(selectedAvatarId, avatars) {
@@ -439,17 +424,6 @@ fun ProfileEditScreen(
                 }
             }
         }
-        item {
-            NuvioSurfaceCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Subtitles", style = MaterialTheme.typography.titleLarge)
-                    if (!subtitlesLoading && subtitlesError == null) {
-                        ProfileOptionRow("OpenSubtitles v3", "Recommended subtitle provider", recommendedSubtitles) { recommendedSubtitles = it }
-                    }
-                    subtitlesError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                }
-            }
-        }
         saveError?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
 
         item {
@@ -462,7 +436,7 @@ fun ProfileEditScreen(
                 } else {
                     stringResource(Res.string.collections_editor_save_changes)
                 },
-                enabled = name.isNotBlank() && !avatarUrlIsInvalid && !isSaving && !subtitlesLoading &&
+                enabled = name.isNotBlank() && !avatarUrlIsInvalid && !isSaving &&
                     (selectedBackgroundUrl.isNullOrBlank() || selectedBackgroundUrl!!.isValidAvatarUrl()) &&
                     (!kidsEnabled || signedIn) &&
                     (!copySettings || settingsSourceId != null) &&
@@ -494,9 +468,6 @@ fun ProfileEditScreen(
                                 ProfileRepository.setAddonProfileLink(id, null)
                                 val selected = addonRows.filter { it.url in selectedUrls && (!kidsEnabled || !isKidsConflictingAddon(it)) }
                                 AddonRepository.importProfileAddons(id, selected)
-                            }
-                            if (!subtitlesLoading && subtitlesError == null) {
-                                AddonRepository.setRecommendedSubtitles(id, recommendedSubtitles)
                             }
                             if (kidsChanged) {
                                 KidsProfileRepository.configure(id, kidsEnabled, kidsMaxRating, kidsApiKey.trim())

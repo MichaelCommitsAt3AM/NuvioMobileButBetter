@@ -29,7 +29,7 @@ Integrations → Size range offers separate minimum and maximum file sizes, with
 New kids profiles start with cast enrichment off and enable TMDB metadata enrichment using the same API key entered during KidsScreen setup. The key stays in that profile’s local credentials. Turn enrichment off at any time in Settings → Integrations → TMDB.
 
 - Kids profiles use KidsScreen catalogs and search with G, PG or PG-13 limits. Nuvio verifies titles before showing them in catalogs, saved libraries, recommendations, downloads and Continue Watching, and before opening details or playing media. Unverifiable titles stay hidden.
-- Create or edit profiles with an accent color, custom avatar, background selection, and the recommended OpenSubtitles v3 toggle. Import selected add-ons from any profile without replacing existing providers or their settings.
+- Create or edit profiles with an accent color, custom avatar, background selection. OpenSubtitles Pro and the Nuvio catalog add-on are included automatically. Import selected add-ons from any profile without replacing existing providers or their settings.
 - New profiles can copy another profile’s layout and preferences once. Saved credentials are excluded and future changes remain independent.
 
 Kids setup requires a signed-in account, a personal TMDB API key and a backend with the existing desktop kids-profile RPCs installed. The primary profile stays the parent profile. KidsScreen holds the encrypted TMDB key; this device stores the configuration management token and keeps the TMDB key in that profile’s local integration settings. Changing a kids rating on a new device may require entering the TMDB key once.

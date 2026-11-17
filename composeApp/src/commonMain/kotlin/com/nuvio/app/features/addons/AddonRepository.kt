@@ -172,8 +172,33 @@ object AddonRepository {
             }
             initialized = true
             log.i { "pullFromServer() — applied ${urls.size} addons to state" }
+            seedDefaultAddonsIfEmpty(profileId)
         }.onFailure { e ->
             log.e(e) { "pullFromServer() — FAILED" }
+        }
+    }
+
+    /**
+     * Installs the built-in [DEFAULT_ADDON_URLS] for a brand-new, non-kids main
+     * profile so a fresh account has content without the user adding anything.
+     * Runs at most once per profile, so deliberately removing every add-on is not
+     * undone later. Only called after a successful cloud pull, so a failed pull is
+     * never mistaken for "this account has no add-ons".
+     */
+    private suspend fun seedDefaultAddonsIfEmpty(profileId: Int) {
+        if (profileId != currentProfileId) return
+        val profile = ProfileRepository.state.value.profiles.find { it.profileIndex == profileId }
+        // Kids profiles get their managed KidsScreen add-on; linked profiles inherit another profile's add-ons.
+        if (profile != null && (profile.kidsEnabled || profile.usesPrimaryAddons || profile.addonSyncProfileId != null)) return
+        if (AddonStorage.isAddonDefaultsSeeded(profileId)) return
+        AddonStorage.markAddonDefaultsSeeded(profileId)
+        if (_uiState.value.addons.any { it.manifestUrl != RECOMMENDED_SUBTITLES_URL }) return
+        log.i { "seedDefaultAddonsIfEmpty() — installing ${DEFAULT_ADDON_URLS.size} default add-on(s) for profile $profileId" }
+        DEFAULT_ADDON_URLS.forEach { url ->
+            when (val outcome = addAddon(url)) {
+                is AddAddonResult.Success -> Unit
+                is AddAddonResult.Error -> log.w { "seedDefaultAddonsIfEmpty() — $url failed: ${outcome.message}" }
+            }
         }
     }
 
@@ -457,15 +482,6 @@ object AddonRepository {
         }
     }
 
-    suspend fun setRecommendedSubtitles(profileId: Int, enabled: Boolean) {
-        flushPendingPushes()
-        val root = com.nuvio.app.features.profiles.addonGroupRoot(ProfileRepository.state.value.profiles, profileId)
-        val rows = withRecommendedSubtitles(readProfileAddonSnapshot(root)).map {
-            if (ensureManifestSuffix(it.url) == RECOMMENDED_SUBTITLES_URL) it.copy(enabled = enabled) else it
-        }
-        saveIndependentProfileAddons(root, rows)
-    }
-
     /** Import into an independent target without losing its order or existing settings. */
     suspend fun importProfileAddons(profileId: Int, imported: List<AddonRow>) {
         flushPendingPushes()
@@ -651,3 +667,12 @@ private fun normalizeManifestUrl(rawUrl: String): String {
 
     return if (query.isEmpty()) manifestPath else "$manifestPath?$query"
 }
+
+/**
+ * Add-ons installed automatically for a brand-new, independent, non-kids profile: the Nuvio
+ * catalog add-on, which provides the app's bundled content. Kids profiles use their
+ * managed KidsScreen add-on instead.
+ */
+private val DEFAULT_ADDON_URLS = listOf(
+    "https://catalog.nuvio.tv/manifest.json",
+)
