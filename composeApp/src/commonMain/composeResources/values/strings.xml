@@ -2487,6 +2487,7 @@
     <string name="download_quality_large_file">%1$s · Large file</string>
     <string name="download_quality_tier_fhd">Full HD</string>
     <string name="download_quality_tier_hd">HD</string>
+    <string name="download_quality_tier_sd">SD</string>
     <string name="download_quality_size_unknown">Size unknown</string>
     <string name="download_quality_starting">Starting…</string>
     <string name="download_quality_error">Could not look up downloads. Please try again.</string>

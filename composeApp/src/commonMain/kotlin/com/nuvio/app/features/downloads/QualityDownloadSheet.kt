@@ -55,6 +55,7 @@ import nuvio.composeapp.generated.resources.download_quality_size_unknown
 import nuvio.composeapp.generated.resources.download_quality_starting
 import nuvio.composeapp.generated.resources.download_quality_tier_fhd
 import nuvio.composeapp.generated.resources.download_quality_tier_hd
+import nuvio.composeapp.generated.resources.download_quality_tier_sd
 import nuvio.composeapp.generated.resources.download_quality_tier_uhd
 import nuvio.composeapp.generated.resources.download_quality_title
 import org.jetbrains.compose.resources.StringResource
@@ -251,12 +252,14 @@ private fun tierTitle(tier: StreamResolutionTier, hdr: Boolean): String = when (
     StreamResolutionTier.UHD_4K -> if (hdr) "4K HDR" else "4K"
     StreamResolutionTier.FHD_1080 -> "1080p"
     StreamResolutionTier.HD_720 -> "720p"
+    StreamResolutionTier.SD -> "480p"
     else -> ""
 }
 
 private fun tierSubtitle(tier: StreamResolutionTier): StringResource = when (tier) {
     StreamResolutionTier.UHD_4K -> Res.string.download_quality_tier_uhd
     StreamResolutionTier.FHD_1080 -> Res.string.download_quality_tier_fhd
+    StreamResolutionTier.SD -> Res.string.download_quality_tier_sd
     else -> Res.string.download_quality_tier_hd
 }
 
