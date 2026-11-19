@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VolumeOff
@@ -57,6 +58,7 @@ import com.nuvio.app.core.ui.LocalVerticalBarPadding
 import com.nuvio.app.features.details.HeroTrailerPlaybackConfig
 import com.nuvio.app.features.details.HeroTrailerSeekRequest
 import kotlinx.coroutines.delay
+import nuvio.composeapp.generated.resources.hero_trailer_fullscreen
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.hero_trailer_label
 import nuvio.composeapp.generated.resources.hero_trailer_mute
@@ -90,6 +92,7 @@ internal fun BoxScope.PhoneHeroTrailerFrame(
     onEnded: () -> Unit,
     onProgress: (positionMs: Long, durationMs: Long) -> Unit,
     onError: () -> Unit,
+    onFullscreen: (() -> Unit)? = null,
 ) {
     val topOffset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
         HeroTrailerPlaybackConfig.FRAME_TOP_OFFSET_DP.dp
@@ -184,6 +187,15 @@ internal fun BoxScope.PhoneHeroTrailerFrame(
                             modifier = Modifier.size(32.dp),
                         )
                     }
+                }
+                // Fades in and out with the pause button, in the frame's top-right corner.
+                onFullscreen?.let { openFullscreen ->
+                    HeroTrailerFullscreenButton(
+                        onClick = { if (visibility() > 0.5f) openFullscreen() },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(10.dp),
+                    )
                 }
             }
         }
@@ -371,6 +383,30 @@ internal fun HeroTrailerPlayBadge(
             style = MaterialTheme.typography.labelMedium,
             color = Color.White,
             modifier = Modifier.padding(start = 4.dp),
+        )
+    }
+}
+
+/** Opens the playing hero trailer in the full-screen trailer player. */
+@Composable
+internal fun HeroTrailerFullscreenButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val description = stringResource(Res.string.hero_trailer_fullscreen)
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = HeroTrailerPlaybackConfig.CONTROL_BACKGROUND_ALPHA))
+            .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Fullscreen,
+            contentDescription = description,
+            tint = Color.White,
+            modifier = Modifier.size(22.dp),
         )
     }
 }

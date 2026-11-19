@@ -54,6 +54,10 @@ fun TrailerPlayerPopup(
     errorMessage: String?,
     onDismiss: () -> Unit,
     onRetry: (() -> Unit)? = null,
+    /** Open straight in full screen (from the hero trailer); leaving full screen closes the player. */
+    startFullscreen: Boolean = false,
+    /** Where playback starts, e.g. the hero trailer's position. */
+    startPositionMs: Long = 0L,
 ) {
     if (!visible) return
 
@@ -69,15 +73,19 @@ fun TrailerPlayerPopup(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
-    val playbackState = remember(playbackSource) { TrailerPlaybackState() }
-    var fullscreen by remember { mutableStateOf(false) }
+    val playbackState = remember(playbackSource) {
+        TrailerPlaybackState().apply {
+            if (startPositionMs > 0L) snapshot = snapshot.copy(positionMs = startPositionMs)
+        }
+    }
+    var fullscreen by remember { mutableStateOf(startFullscreen) }
     val toggleFullscreen = {
         playbackState.changePresentation()
         fullscreen = !fullscreen
     }
 
     val exitFullscreen = {
-        if (isIos) {
+        if (isIos || startFullscreen) {
             playbackState.controller?.pause()
             onDismiss()
         } else {

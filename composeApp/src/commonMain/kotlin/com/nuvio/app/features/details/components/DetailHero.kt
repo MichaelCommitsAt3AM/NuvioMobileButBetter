@@ -98,6 +98,7 @@ fun DetailHero(
     heroTrailerUserPaused: Boolean = false,
     onHeroTrailerUserPausedToggle: () -> Unit = {},
     onHeroTrailerProgress: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
+    onHeroTrailerFullscreen: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(
@@ -307,6 +308,7 @@ fun DetailHero(
                                     onHeroTrailerProgress(position, duration)
                                 },
                                 onError = onHeroTrailerError,
+                                onFullscreen = onHeroTrailerFullscreen,
                             )
                         }
                     }

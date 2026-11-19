@@ -2683,6 +2683,7 @@
     <string name="hero_trailer_mute">Mute trailer</string>
     <string name="hero_trailer_unmute">Unmute trailer</string>
     <string name="hero_trailer_play_badge">Play trailer</string>
+    <string name="hero_trailer_fullscreen">Watch trailer full screen</string>
     <string name="hero_trailer_play">Play</string>
     <string name="hero_trailer_pause">Pause</string>
 </resources>

@@ -56,6 +56,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -761,6 +762,9 @@ fun MetaDetailsScreen(
                 var trailerLoading by remember(meta.id) { mutableStateOf(false) }
                 var trailerErrorMessage by remember(meta.id) { mutableStateOf<String?>(null) }
                 var trailerRequestToken by remember(meta.id) { mutableIntStateOf(0) }
+                // Set when the hero trailer's full-screen button opened the trailer player.
+                var trailerFromHeroFullscreen by remember(meta.id) { mutableStateOf(false) }
+                var trailerStartPositionMs by remember(meta.id) { mutableLongStateOf(0L) }
                 var isLeavingDetails by remember(meta.id) { mutableStateOf(false) }
                 val heroTrailerCandidate = remember(meta.trailers) {
                     selectOriginalTrailer(meta.trailers)
@@ -795,6 +799,8 @@ fun MetaDetailsScreen(
                         if (!inAppTrailerPlaybackEnabled) {
                             runCatching { uriHandler.openUri(youtubeUrl) }
                         } else {
+                            trailerFromHeroFullscreen = false
+                            trailerStartPositionMs = 0L
                             selectedTrailer = trailer
                             trailerPlaybackSource = null
                             trailerErrorMessage = null
@@ -1328,6 +1334,18 @@ fun MetaDetailsScreen(
                                                 heroTrailerUserPaused = heroTrailerUserPaused,
                                                 onHeroTrailerUserPausedToggle = { heroTrailerUserPaused = !heroTrailerUserPaused },
                                                 onHeroTrailerProgress = { position, _ -> heroTrailerResume[0] = position },
+                                                onHeroTrailerFullscreen = heroTrailerCandidate?.let { trailer ->
+                                                    {
+                                                        // Reuse the stream the hero already resolved: opens instantly, no second YouTube lookup.
+                                                        trailerRequestToken += 1
+                                                        trailerFromHeroFullscreen = true
+                                                        trailerStartPositionMs = heroTrailerResume[0]
+                                                        trailerPlaybackSource = heroTrailerPlaybackSource
+                                                        trailerLoading = false
+                                                        trailerErrorMessage = null
+                                                        selectedTrailer = trailer
+                                                    }
+                                                },
                                             )
                                         }
                                     }
@@ -1637,10 +1655,16 @@ fun MetaDetailsScreen(
                                     trailerPlaybackSource = null
                                     trailerErrorMessage = null
                                     selectedTrailer = null
+                                    // Back from full screen: leave the hero trailer paused, not restarting behind the user.
+                                    if (trailerFromHeroFullscreen) heroTrailerUserPaused = true
+                                    trailerFromHeroFullscreen = false
+                                    trailerStartPositionMs = 0L
                                 },
                                 onRetry = selectedTrailer?.let { trailer ->
                                     { resolveTrailer(trailer) }
                                 },
+                                startFullscreen = trailerFromHeroFullscreen,
+                                startPositionMs = trailerStartPositionMs,
                             )
                         }
 
