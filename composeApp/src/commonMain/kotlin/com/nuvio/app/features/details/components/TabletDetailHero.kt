@@ -468,8 +468,13 @@ private fun TabletHeroMetaRow(meta: MetaDetails, showImdbRating: Boolean) {
                 maxLines = 1,
             )
         }
-        meta.ageRating?.takeIf { it.isNotBlank() }?.let { rating ->
-            DetailHeroMetaBadge(text = rating)
+        val ageRating = meta.ageRating?.takeIf { it.isNotBlank() }
+        val releaseStateLabel = detailReleaseStateLabel(meta)
+        if (ageRating != null || releaseStateLabel != null) {
+            DetailHeroMetaBadge(
+                text = ageRating ?: releaseStateLabel.orEmpty(),
+                secondaryText = releaseStateLabel.takeIf { ageRating != null },
+            )
         }
         if (validImdbRating != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {

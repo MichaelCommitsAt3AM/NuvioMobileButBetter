@@ -88,6 +88,7 @@ fun DetailMetaInfo(
         val releaseLine = formatMetaReleaseLineForDetails(meta)
         val runtimeText = formatRuntimeForDisplay(meta.runtime)
         val ageBadge = meta.ageRating?.trim()?.takeIf { it.isNotBlank() }
+        val releaseStateLabel = detailReleaseStateLabel(meta)
         val validImdbRating = meta.imdbRating
             ?.takeIf { showOverallRatings && !isMdbListActive }
             ?.toDoubleOrNull()
@@ -98,6 +99,7 @@ fun DetailMetaInfo(
         val hasMetaRow = releaseLine != null ||
             runtimeText != null ||
             ageBadge != null ||
+            releaseStateLabel != null ||
             validImdbRating != null ||
             ratingState.isAvailable
         if (hasMetaRow) {
@@ -122,8 +124,11 @@ fun DetailMetaInfo(
                         fontWeight = FontWeight.Bold,
                     )
                 }
-                ageBadge?.let { badge ->
-                    DetailHeroMetaBadge(text = badge)
+                if (ageBadge != null || releaseStateLabel != null) {
+                    DetailHeroMetaBadge(
+                        text = ageBadge ?: releaseStateLabel.orEmpty(),
+                        secondaryText = releaseStateLabel.takeIf { ageBadge != null },
+                    )
                 }
                 if (validImdbRating != null) {
                     val imdbTextStyle = MaterialTheme.typography.titleMedium.copy(

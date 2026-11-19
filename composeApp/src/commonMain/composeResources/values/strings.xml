@@ -2601,6 +2601,9 @@
     <string name="movie_status_rumored">Rumored</string>
     <string name="movie_status_in_production">In Production</string>
     <string name="movie_status_post_production">Post Production</string>
+    <string name="details_release_state_unreleased">Unreleased</string>
+    <string name="details_release_state_in_cinemas">In cinemas</string>
+    <string name="details_release_state_released">Released</string>
     <string name="cd_switch_player_engine">Switch player engine</string>
     <string name="cd_stream_info">Stream info</string>
     <string name="player_engine_switching_manual_message">Switching to %1$s...</string>
