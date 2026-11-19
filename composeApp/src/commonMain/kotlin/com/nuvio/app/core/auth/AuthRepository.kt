@@ -77,6 +77,19 @@ object AuthRepository {
                     }
                     is SessionStatus.NotAuthenticated -> {
                         if (AuthStorage.loadFlag(KEY_HAD_ACCOUNT_SESSION)) {
+                            // A refresh that fails while the network wakes up after a long
+                            // background period can surface here transiently. Only treat it as a
+                            // lost session (which wipes local data) once it's confirmed.
+                            if (!status.isSignOut && !confirmSessionLoss(
+                                    hasSession = {
+                                        SupabaseProvider.client.auth.currentSessionOrNull() != null
+                                    },
+                                    refreshRejected = ::refreshOutcome,
+                                )
+                            ) {
+                                log.w { "Ignoring transient NotAuthenticated; session still valid" }
+                                return@collect
+                            }
                             resetAfterLostSession()
                         } else {
                             _state.value = AuthState.Unauthenticated
@@ -232,6 +245,19 @@ object AuthRepository {
         } catch (e: Throwable) {
             log.w(e) { "Supabase session refresh failed" }
             e.isInvalidRefreshError()
+        }
+    }
+
+    /** `true` = refresh token rejected, `false` = refreshed, `null` = inconclusive (transient). */
+    private suspend fun refreshOutcome(): Boolean? = refreshMutex.withLock {
+        try {
+            SupabaseProvider.client.auth.refreshCurrentSession()
+            false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            log.w(e) { "Supabase session refresh failed while confirming session loss" }
+            if (e.isInvalidRefreshError()) true else null
         }
     }
 

@@ -46,6 +46,9 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.profiles.ProfileSelectionScreen
 import com.nuvio.app.features.profiles.profileAvatarImageUrl
 import com.nuvio.app.navigation.AppRoute
+import kotlinx.coroutines.delay
+
+private const val UNAUTHENTICATED_GRACE_MS = 1_200L
 
 private enum class AppGateScreen {
     Loading,
@@ -325,6 +328,15 @@ internal fun AppGate(
                 if (allowCachedProfileAccess) {
                     enterProfileGate(cachedProfiles, syncOnEnter = false)
                 } else {
+                    // Grace period: when already past the Loading/Auth gates, a brief
+                    // Unauthenticated blip must not flash the login screen. This effect restarts
+                    // (cancelling the delay) if the auth state flips back to Authenticated.
+                    if (
+                        gateScreen != AppGateScreen.Loading.name &&
+                        gateScreen != AppGateScreen.Auth.name
+                    ) {
+                        delay(UNAUTHENTICATED_GRACE_MS)
+                    }
                     ProfileRepository.clearInMemory()
                     profileSelectionLoading = false
                     profileSelectionTransitionActive = false
