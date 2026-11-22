@@ -273,7 +273,12 @@ internal fun AppGate(
         }
     }
 
+    // Whether the gate has already routed into profile selection / main this composition. Not
+    // saveable on purpose: after process death the gate must route again from the cached state.
+    var profileGateEntered by remember { mutableStateOf(false) }
+
     fun enterProfileGate(profiles: List<NuvioProfile>, syncOnEnter: Boolean) {
+        profileGateEntered = true
         profileSelectionLoading = false
         profileSelectionTransitionActive = false
         if (profiles.isEmpty()) {
@@ -316,17 +321,30 @@ internal fun AppGate(
                         gateScreen != AppGateScreen.Auth.name
                 )
 
+        // This effect re-runs whenever the network condition or the profile list changes (e.g.
+        // Unknown -> Checking -> Online at startup while auth is still Loading). Re-entering the
+        // gate then would throw a user who just picked a profile back to the selection screen, so
+        // only route through it once, or again after being sent to Loading/Auth.
+        val shouldEnterProfileGate =
+            !profileGateEntered ||
+                gateScreen == AppGateScreen.Loading.name ||
+                gateScreen == AppGateScreen.Auth.name
+
         when (authState) {
             is AuthState.Loading -> {
                 if (hasCachedProfileAccess) {
-                    enterProfileGate(cachedProfiles, syncOnEnter = false)
+                    if (shouldEnterProfileGate) {
+                        enterProfileGate(cachedProfiles, syncOnEnter = false)
+                    }
                 } else {
                     gateScreen = AppGateScreen.Loading.name
                 }
             }
             is AuthState.Unauthenticated -> {
                 if (allowCachedProfileAccess) {
-                    enterProfileGate(cachedProfiles, syncOnEnter = false)
+                    if (shouldEnterProfileGate) {
+                        enterProfileGate(cachedProfiles, syncOnEnter = false)
+                    }
                 } else {
                     // Grace period: when already past the Loading/Auth gates, a brief
                     // Unauthenticated blip must not flash the login screen. This effect restarts
