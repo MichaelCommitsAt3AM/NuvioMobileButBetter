@@ -9,6 +9,11 @@ internal fun <T> kidsVisibleState(
     source: StateFlow<T>, scope: CoroutineScope, empty: T,
     profiles: StateFlow<ProfileState> = ProfileRepository.state,
     sameContent: ((T, T) -> Boolean)? = null,
+    /**
+     * Optional faster, still-safe partial result shown while [sanitize] finishes (for example a title
+     * already verified, with unchecked related titles left out). Null skips the preview.
+     */
+    preview: (suspend (T) -> T?)? = null,
     sanitize: suspend (T) -> T,
 ): StateFlow<T> {
     var verified: Pair<NuvioProfile, T>? = null
@@ -21,7 +26,11 @@ internal fun <T> kidsVisibleState(
             // Retain only an already-sanitized version of the same content.
             // New titles and changes to the profile/policy still clear immediately.
             val previous = verified
-            if (previous == null || previous.first != profile || sameContent?.invoke(previous.second, value) != true) emit(empty)
+            if (previous == null || previous.first != profile || sameContent?.invoke(previous.second, value) != true) {
+                emit(empty)
+                // A preview only replaces the empty placeholder; it never downgrades a verified version.
+                preview?.invoke(value)?.let { partial -> if (profiles.value.activeProfile == profile) emit(partial) }
+            }
             val filtered = sanitize(value)
             if (profiles.value.activeProfile == profile) {
                 verified = profile to filtered

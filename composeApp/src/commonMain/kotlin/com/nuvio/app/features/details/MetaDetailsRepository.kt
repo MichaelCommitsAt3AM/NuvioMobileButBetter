@@ -60,11 +60,25 @@ object MetaDetailsRepository {
         sameContent = { previous, next ->
             previous.meta?.let { meta -> next.meta?.let { it.id == meta.id && it.type == meta.type } == true } == true
         },
+        // Show the verified title at once, with only related titles already known to be allowed.
+        preview = { state ->
+            val meta = state.meta
+            if (meta == null) null else try {
+                requireTitle(meta)
+                state.copy(meta = meta.copy(
+                    moreLikeThis = KidsProfileRepository.filterCached(meta.moreLikeThis, { it.type }, { it.id }),
+                    collectionItems = KidsProfileRepository.filterCached(meta.collectionItems, { it.type }, { it.id }),
+                ))
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                null
+            }
+        },
     ) { state ->
         val meta = state.meta
         if (meta == null) state else {
             try {
-                KidsProfileRepository.requireMedia(meta.type, meta.id)
+                requireTitle(meta)
                 state.copy(meta = meta.copy(
                     moreLikeThis = KidsProfileRepository.filter(meta.moreLikeThis, { it.type }, { it.id }),
                     collectionItems = KidsProfileRepository.filter(meta.collectionItems, { it.type }, { it.id }),
@@ -74,6 +88,20 @@ object MetaDetailsRepository {
                 MetaDetailsUiState(errorMessage = error.message)
             }
         }
+    }
+
+    /** The title [load] approved, while its request is the active one. */
+    private var approvedTitle: Pair<String, String>? = null
+
+    /**
+     * Re-checks the displayed title. An addon may return metadata under a different id than the one
+     * requested (and approved in [load]); that request's approval is reused instead of failing on the
+     * rewritten id.
+     */
+    private suspend fun requireTitle(meta: MetaDetails) {
+        val approved = approvedTitle?.takeIf { (type, id) -> type == meta.type && activeRequestKey == "$type:$id" }
+        if (approved != null) KidsProfileRepository.requireMedia(approved.first, approved.second)
+        else KidsProfileRepository.requireMedia(meta.type, meta.id)
     }
     private var admissionToken: Any? = null
     private var activeRequestKey: String? = null
@@ -95,6 +123,7 @@ object MetaDetailsRepository {
             try {
                 KidsProfileRepository.requireMedia(type, id)
                 if (admissionToken !== token) return@launch
+                approvedTitle = type to id
                 loadApproved(type, id)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error

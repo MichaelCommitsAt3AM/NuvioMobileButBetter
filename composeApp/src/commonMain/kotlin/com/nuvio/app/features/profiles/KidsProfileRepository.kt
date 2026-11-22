@@ -14,6 +14,9 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
@@ -175,35 +178,83 @@ object KidsProfileRepository {
 
     internal data class Ref(val type: String, val id: String)
     private fun mediaRef(type: String?, id: String?): Ref? = if (type in setOf("movie", "series") && !id.isNullOrBlank()) Ref(type!!, id) else null
+    /** [unavailable] holds titles the service could not decide; they are hidden but never shown as blocked. */
+    internal data class CheckResult(val allowed: Set<Ref>, val unavailable: Set<Ref>)
+
     internal suspend fun check(
         profile: NuvioProfile, refs: Set<Ref>,
-        lookup: suspend (NuvioProfile, List<Ref>) -> Set<Ref> = ::lookupRatings,
-    ): Set<Ref> = verdictMutex.withLock {
-        val now = Clock.System.now().toEpochMilliseconds()
-        fun key(ref: Ref) = "${profile.userId}|${profile.kidsServiceUrl}|${profile.kidsConfigId}|${profile.kidsMaxRating}|${ref.type}|${ref.id}"
-        val missing = refs.filter { it.type in setOf("movie", "series") }.filter { verdicts[key(it)]?.expires?.let { expiry -> expiry > now } != true }
-        for (batch in missing.chunked(200)) {
-            val allowed = try {
-                lookup(profile, batch)
-            } catch (error: CancellationException) { throw error } catch (_: Exception) { emptySet() }
-            if (verdicts.size > 4000) verdicts.clear()
-            batch.forEach { ref -> verdicts[key(ref)] = Verdict(ref in allowed, now + if (ref in allowed) 300_000 else 15_000) }
+        lookup: suspend (NuvioProfile, List<Ref>) -> Map<Ref, Boolean> = ::lookupRatings,
+    ): Set<Ref> = checkDetailed(profile, refs, lookup).allowed
+
+    /**
+     * Fails closed: only titles the service explicitly allowed are returned as allowed. A failed request,
+     * or an item the service marks `unavailable`, is remembered only briefly and reported separately so
+     * callers can say "try again" rather than "blocked". The lock is held only around the verdict map,
+     * so independent checks and their batches run concurrently.
+     */
+    internal suspend fun checkDetailed(
+        profile: NuvioProfile, refs: Set<Ref>,
+        lookup: suspend (NuvioProfile, List<Ref>) -> Map<Ref, Boolean> = ::lookupRatings,
+    ): CheckResult {
+        fun key(ref: Ref) = verdictKey(profile, ref)
+        val missing = verdictMutex.withLock {
+            val now = Clock.System.now().toEpochMilliseconds()
+            refs.filter { it.type in setOf("movie", "series") }.filter { verdicts[key(it)]?.expires?.let { expiry -> expiry > now } != true }
         }
-        refs.filter { verdicts[key(it)]?.let { verdict -> verdict.allowed && verdict.expires > Clock.System.now().toEpochMilliseconds() } == true }.toSet()
+        if (missing.isNotEmpty()) {
+            val outcomes = coroutineScope {
+                missing.chunked(200).map { batch ->
+                    async {
+                        batch to try { lookup(profile, batch) } catch (error: CancellationException) { throw error } catch (_: Exception) { null }
+                    }
+                }.awaitAll()
+            }
+            verdictMutex.withLock {
+                val now = Clock.System.now().toEpochMilliseconds()
+                if (verdicts.size > 4000) verdicts.clear()
+                outcomes.forEach { (batch, rows) ->
+                    batch.forEach { ref ->
+                        verdicts[key(ref)] = when (rows?.get(ref)) {
+                            true -> Verdict(true, now + 300_000)
+                            false -> Verdict(false, now + 15_000)
+                            null -> Verdict(false, now + 5_000, unavailable = true)
+                        }
+                    }
+                }
+            }
+        }
+        return verdictMutex.withLock {
+            val now = Clock.System.now().toEpochMilliseconds()
+            val live = refs.mapNotNull { ref -> verdicts[key(ref)]?.takeIf { it.expires > now }?.let { ref to it } }
+            CheckResult(
+                allowed = live.filter { it.second.allowed }.map { it.first }.toSet(),
+                unavailable = live.filter { it.second.unavailable }.map { it.first }.toSet(),
+            )
+        }
     }
 
+    /** Titles already known to be allowed, without a network request. */
+    internal suspend fun cachedAllowed(profile: NuvioProfile, refs: Set<Ref>): Set<Ref> = verdictMutex.withLock {
+        val now = Clock.System.now().toEpochMilliseconds()
+        refs.filter { verdicts[verdictKey(profile, it)]?.let { verdict -> verdict.allowed && verdict.expires > now } == true }.toSet()
+    }
 
-    private suspend fun lookupRatings(profile: NuvioProfile, batch: List<Ref>): Set<Ref> {
+    private fun verdictKey(profile: NuvioProfile, ref: Ref) = "${profile.userId}|${profile.kidsServiceUrl}|${profile.kidsConfigId}|${profile.kidsMaxRating}|${ref.type}|${ref.id}"
+
+    /** Allowed/denied per title; titles the service marks `unavailable` (or omits) are left out. */
+    private suspend fun lookupRatings(profile: NuvioProfile, batch: List<Ref>): Map<Ref, Boolean> {
         val result = request(profile.kidsServiceUrl!!, "/${profile.kidsConfigId}/check", buildJsonObject {
             put("items", JsonArray(batch.map { buildJsonObject { put("type", it.type); put("id", it.id) } }))
         })
         return (result["items"] as? JsonArray).orEmpty().mapNotNull { item ->
-            val row = item.jsonObject
-            if (row["allowed"]?.jsonPrimitive?.booleanOrNull == true) mediaRef(row["type"]?.jsonPrimitive?.content, row["id"]?.jsonPrimitive?.content) else null
-        }.toSet()
+            val row = item as? JsonObject ?: return@mapNotNull null
+            val ref = mediaRef(row["type"]?.jsonPrimitive?.contentOrNull, row["id"]?.jsonPrimitive?.contentOrNull) ?: return@mapNotNull null
+            if (row["unavailable"]?.jsonPrimitive?.booleanOrNull == true) return@mapNotNull null
+            ref to (row["allowed"]?.jsonPrimitive?.booleanOrNull == true)
+        }.toMap()
     }
 
-    private data class Verdict(val allowed: Boolean, val expires: Long)
+    private data class Verdict(val allowed: Boolean, val expires: Long, val unavailable: Boolean = false)
     private val verdicts = mutableMapOf<String, Verdict>()
     private val verdictMutex = Mutex()
     private suspend fun clearVerdicts() = verdictMutex.withLock { verdicts.clear() }
@@ -211,8 +262,19 @@ object KidsProfileRepository {
     suspend fun requireMedia(type: String?, id: String?) {
         val profile = active ?: return
         val ref = mediaRef(type, id) ?: error("This title is unavailable in this kids profile")
-        check(ref in check(profile, setOf(ref))) { "This title could not be verified for this kids profile" }
+        val result = checkDetailed(profile, setOf(ref))
+        if (ref !in result.allowed) {
+            if (ref in result.unavailable) throw KidsProfileException("KIDSSCREEN_UNAVAILABLE", "KidsScreen could not check this title right now. Try again in a moment.")
+            throw KidsProfileException("KIDS_TITLE_BLOCKED", "This title could not be verified for this kids profile")
+        }
         check(active == profile) { "Profile changed. Open the title again." }
+    }
+
+    /** Like [filter] but uses only verdicts already known, never a request; unchecked titles are left out. */
+    suspend fun <T> filterCached(items: List<T>, type: (T) -> String, id: (T) -> String): List<T> {
+        val profile = active ?: return items
+        val allowed = cachedAllowed(profile, items.mapNotNull { mediaRef(type(it), id(it)) }.toSet())
+        return items.filter { mediaRef(type(it), id(it)) in allowed }
     }
 
     suspend fun <T> filter(items: List<T>, type: (T) -> String, id: (T) -> String): List<T> {

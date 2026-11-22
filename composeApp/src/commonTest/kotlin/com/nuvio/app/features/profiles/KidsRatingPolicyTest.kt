@@ -25,7 +25,7 @@ class KidsRatingPolicyTest {
         val sizes = mutableListOf<Int>()
         val result = KidsProfileRepository.check(profile("batch"), refs) { _, batch ->
             sizes += batch.size
-            batch.filter { it.id == "tt1" || it.id == "tt401" }.toSet()
+            batch.associateWith { it.id == "tt1" || it.id == "tt401" }
         }
         assertEquals(listOf(200, 200, 1), sizes)
         assertEquals(setOf(KidsProfileRepository.Ref("movie", "tt1"), KidsProfileRepository.Ref("movie", "tt401")), result)
@@ -39,11 +39,35 @@ class KidsRatingPolicyTest {
     @Test fun ratingAndAccountChangesNeverReuseAnotherPolicyVerdict() = runBlocking {
         val original = profile("cache")
         val refs = setOf(KidsProfileRepository.Ref("series", "tt123"))
-        assertEquals(refs, KidsProfileRepository.check(original, refs) { _, batch -> batch.toSet() })
+        assertEquals(refs, KidsProfileRepository.check(original, refs) { _, batch -> batch.associateWith { true } })
         assertEquals(refs, KidsProfileRepository.check(original, refs) { _, _ -> error("must use cache") })
         for (changed in listOf(original.copy(kidsMaxRating = "PG"), original.copy(userId = "another-parent"), original.copy(kidsConfigId = "other-config"))) {
-            assertTrue(KidsProfileRepository.check(changed, refs) { _, _ -> emptySet() }.isEmpty())
+            assertTrue(KidsProfileRepository.check(changed, refs) { _, batch -> batch.associateWith { false } }.isEmpty())
         }
+    }
+
+    @Test fun outagesAreReportedApartFromRatingDenials() = runBlocking {
+        val undecided = KidsProfileRepository.Ref("movie", "tt7")
+        val denied = KidsProfileRepository.Ref("movie", "tt8")
+        val result = KidsProfileRepository.checkDetailed(profile("outage"), setOf(undecided, denied)) { _, _ -> mapOf(denied to false) }
+        assertEquals(emptySet(), result.allowed)
+        assertEquals(setOf(undecided), result.unavailable)
+        val failed = KidsProfileRepository.checkDetailed(profile("outage-request"), setOf(denied)) { _, _ -> error("offline") }
+        assertEquals(setOf(denied), failed.unavailable)
+    }
+
+    @Test fun batchesAreRequestedConcurrently() = runBlocking {
+        val refs = (1..400).map { KidsProfileRepository.Ref("movie", "tt$it") }.toSet()
+        val bothStarted = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var started = 0
+        val result = kotlinx.coroutines.withTimeout(5_000) {
+            KidsProfileRepository.check(profile("parallel"), refs) { _, batch ->
+                if (++started == 2) bothStarted.complete(Unit)
+                bothStarted.await()
+                batch.associateWith { true }
+            }
+        }
+        assertEquals(refs, result)
     }
 
     @Test fun cancellationIsNotTreatedAsARejectedTitle() = runBlocking<Unit> {
