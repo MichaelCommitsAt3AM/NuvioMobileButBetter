@@ -65,6 +65,37 @@ class HomeCatalogSettingsRepositoryTest {
         HomeRepository.clear()
     }
 
+    private fun catalogAddon(id: String, vararg catalogs: AddonCatalog) = ManagedAddon(
+        manifestUrl = "https://$id.example.com/manifest.json",
+        manifest = AddonManifest(
+            id = id, name = id, description = "", version = "1", resources = emptyList(),
+            types = listOf("movie", "series"), catalogs = catalogs.toList(), transportUrl = "https://$id.example.com",
+        ),
+    )
+
+    @Test
+    fun changingAddonsSelectsTheFirstHeroCatalogWhenNoneIsSelected() {
+        val first = catalogAddon("first", AddonCatalog("movie", "trending", "Trending"), AddonCatalog("series", "trending", "Trending"))
+        val second = catalogAddon("second", AddonCatalog("movie", "new", "New"))
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(first, second))
+        HomeCatalogSettingsRepository.uiState.value.items.forEach {
+            HomeCatalogSettingsRepository.setHeroSourceEnabled(it.key, it.key.startsWith("second"))
+        }
+        assertEquals(1, HomeCatalogSettingsRepository.uiState.value.items.count { it.heroSourceEnabled })
+
+        // Removing the only selected source leaves 0 of 2, so the first remaining catalog is picked.
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(first))
+
+        val items = HomeCatalogSettingsRepository.uiState.value.items
+        assertEquals(listOf(items.minBy { it.order }.key), items.filter { it.heroSourceEnabled }.map { it.key })
+    }
+
+    @Test
+    fun anAddonSetWithoutHomeCatalogsSelectsNoHeroSource() {
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(catalogAddon("empty")))
+        assertTrue(HomeCatalogSettingsRepository.uiState.value.items.none { it.heroSourceEnabled })
+    }
+
     @Test
     fun unchangedCatalogsDoNotRewriteSettings() {
         val addons = listOf(addon())
