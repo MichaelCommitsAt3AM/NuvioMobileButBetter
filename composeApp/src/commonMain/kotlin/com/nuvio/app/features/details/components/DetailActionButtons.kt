@@ -275,6 +275,7 @@ fun DetailActionButtons(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DetailActions(
+    meta: com.nuvio.app.features.details.MetaDetails,
     playLabel: String,
     playEnabled: Boolean,
     isSaved: Boolean,
@@ -297,8 +298,9 @@ fun DetailActions(
             onClick = onClick,
         )
     }
-    val metaState by MetaDetailsRepository.visibleUiState.collectAsStateWithLifecycle()
-    val downloadMeta = metaState.meta?.takeIf { it.type == "movie" }
+    // Use the meta the screen is displaying; the repository's global state can be momentarily
+    // empty while a reload is in flight, which made the button vanish until re-entering the page.
+    val downloadMeta = meta.takeIf { it.type == "movie" }
     var showDownloadSheet by remember { mutableStateOf(false) }
     val downloadLabel = stringResource(Res.string.details_download_action)
     val titleDownload = downloadMeta?.let { rememberTitleDownload(it.type, it.id) }
