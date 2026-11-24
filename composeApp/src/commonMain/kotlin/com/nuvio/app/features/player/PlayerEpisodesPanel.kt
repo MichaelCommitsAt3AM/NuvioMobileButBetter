@@ -2,7 +2,9 @@ package com.nuvio.app.features.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +80,8 @@ fun PlayerEpisodesPanel(
     episodeStreamsState: EpisodeStreamsPanelState,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeSelected: (MetaVideo) -> Unit,
+    /** Long press: always open the episode's stream list. */
+    onEpisodeLongPressed: (MetaVideo) -> Unit,
     onEpisodeStreamFilterSelected: (String?) -> Unit,
     onEpisodeStreamSelected: (StreamItem, MetaVideo) -> Unit,
     onBackToEpisodes: () -> Unit,
@@ -131,6 +135,7 @@ fun PlayerEpisodesPanel(
                     blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                     onSeasonSelected = onSeasonSelected,
                     onEpisodeSelected = onEpisodeSelected,
+                    onEpisodeLongPressed = onEpisodeLongPressed,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -156,6 +161,7 @@ private fun EpisodesListPanelContent(
     blurUnwatchedEpisodes: Boolean,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeSelected: (MetaVideo) -> Unit,
+    onEpisodeLongPressed: (MetaVideo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -280,6 +286,7 @@ private fun EpisodesListPanelContent(
                         isWatched = isWatched,
                         blurUnwatchedEpisodes = blurUnwatchedEpisodes,
                         onClick = { onEpisodeSelected(episode) },
+                        onLongClick = { onEpisodeLongPressed(episode) },
                     )
                 }
             }
@@ -316,6 +323,7 @@ private fun EpisodeSeasonChip(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EpisodeRow(
     episode: MetaVideo,
@@ -323,6 +331,7 @@ private fun EpisodeRow(
     isWatched: Boolean,
     blurUnwatchedEpisodes: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
     val cardShape = RoundedCornerShape(16.dp)
@@ -356,7 +365,7 @@ private fun EpisodeRow(
             .semantics {
                 if (isCurrent) stateDescription = playingDescription
             }
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(10.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(14.dp),

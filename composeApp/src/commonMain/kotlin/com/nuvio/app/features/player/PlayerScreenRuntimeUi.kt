@@ -42,7 +42,9 @@ import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.party.PartyRepository
 import com.nuvio.app.features.p2p.formatP2pMegabytes
 import com.nuvio.app.features.p2p.formatP2pSpeed
+import com.nuvio.app.features.player.skip.NextEpisodeInfo
 import com.nuvio.app.features.player.skip.internalSkipAction
+import com.nuvio.app.features.streams.StreamAutoPlayMode
 import com.nuvio.app.features.servers.ServerStreams
 import com.nuvio.app.features.streams.streamAddonInstanceId
 import com.nuvio.app.isIos
@@ -665,7 +667,21 @@ private fun BoxScope.RenderPlaybackOverlays(
         sliderEdgePadding = sliderEdgePadding,
         overlayBottomPadding = overlayBottomPadding,
         isSeries = isSeries,
-        nextEpisodeInfo = nextEpisodeInfo,
+        // While a picked episode's stream is being chosen, the card shows that episode.
+        nextEpisodeInfo = selectedEpisodeAutoPlay?.let { episode ->
+            NextEpisodeInfo(
+                videoId = episode.id,
+                season = episode.season ?: 0,
+                episode = episode.episode ?: 0,
+                title = episode.title,
+                thumbnail = episode.thumbnail,
+                overview = episode.overview,
+                released = episode.released,
+                hasAired = true,
+                isWatched = false,
+                unairedMessage = null,
+            )
+        } ?: nextEpisodeInfo,
         showNextEpisodeCard = showNextEpisodeCard,
         nextEpisodeAutoPlaySearching = nextEpisodeAutoPlaySearching,
         nextEpisodeAutoPlaySourceName = nextEpisodeAutoPlaySourceName,
@@ -856,6 +872,8 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
                 onDownloadedEpisodeSelected = { item, video -> switchToDownloadedEpisode(item, video) },
             )
         },
+        episodeAutoSelectEnabled = playerSettingsUiState.streamAutoPlayMode != StreamAutoPlayMode.MANUAL,
+        onEpisodePlayRequested = { episode -> playSelectedEpisode(episode) },
         onEpisodeStreamsRequested = { episode ->
             PlayerStreamsRepository.loadEpisodeStreams(
                 contentTitle = title,

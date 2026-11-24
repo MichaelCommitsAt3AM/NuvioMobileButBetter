@@ -82,6 +82,9 @@ internal fun PlayerScreenModalHosts(
     episodeStreamsRepoState: StreamsUiState,
     onEpisodeSelectedForDownload: (MetaVideo) -> Boolean,
     onEpisodeStreamsRequested: (MetaVideo) -> Unit,
+    /** True when auto-select picks streams: a tap then plays the episode directly. */
+    episodeAutoSelectEnabled: Boolean,
+    onEpisodePlayRequested: (MetaVideo) -> Unit,
     onEpisodeStreamFilterSelected: (String?) -> Unit,
     onEpisodeStreamSelected: (StreamItem, MetaVideo) -> Unit,
     onBackToEpisodes: () -> Unit,
@@ -206,9 +209,11 @@ internal fun PlayerScreenModalHosts(
             onSeasonSelected = { },
             onEpisodeSelected = { episode ->
                 if (!onEpisodeSelectedForDownload(episode)) {
-                    onEpisodeStreamsRequested(episode)
+                    if (episodeAutoSelectEnabled) onEpisodePlayRequested(episode)
+                    else onEpisodeStreamsRequested(episode)
                 }
             },
+            onEpisodeLongPressed = onEpisodeStreamsRequested,
             onEpisodeStreamFilterSelected = onEpisodeStreamFilterSelected,
             onEpisodeStreamSelected = onEpisodeStreamSelected,
             onBackToEpisodes = onBackToEpisodes,
