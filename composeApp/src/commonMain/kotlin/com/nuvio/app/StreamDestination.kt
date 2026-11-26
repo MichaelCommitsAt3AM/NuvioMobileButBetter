@@ -80,7 +80,7 @@ internal fun StreamDestination(
     onLandscapeLoadingChanged: (Boolean) -> Unit,
 ) {
     val onBack = rememberGuardedPopBackStack(navController, route)
-    val downloadsSettingsTitle = stringResource(Res.string.compose_settings_root_downloads_title)
+    val dataSaverSettingsTitle = stringResource(Res.string.settings_playback_page_data_saver)
     val launch = remember(route.launchId) {
         StreamLaunchStore.get(route.launchId)
     }
@@ -876,9 +876,13 @@ internal fun StreamDestination(
                         forceInternal = !openExternally,
                     )
                 },
+                // The Data Saver chip's settings: Data Saver's own page under Settings → Playback.
                 onOpenDownloadFilterSettings = {
                     navController.navigate(
-                        DownloadsRoute(downloadsSettingsTitle, openFilterSettings = true),
+                        SettingsPageRoute(
+                            pageName = com.nuvio.app.features.settings.SettingsPage.PlaybackDataSaver.name,
+                            title = dataSaverSettingsTitle,
+                        ),
                     )
                 },
                 onBack = onBack,

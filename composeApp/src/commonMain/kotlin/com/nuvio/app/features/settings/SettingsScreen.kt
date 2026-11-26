@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.features.downloads.dataSaverSettingsContent
 import com.nuvio.app.core.ui.LocalScreenActive
 import com.nuvio.app.core.ui.ScreenActivityEffect
 import com.nuvio.app.core.ui.AppTheme
@@ -593,6 +594,14 @@ private fun MobileSettingsScreen(
             }
         }
 
+        val dataSaverPlayback by remember {
+            com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.ensureLoaded()
+            com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.uiState
+        }.collectAsStateWithLifecycle()
+        val dataSaverConfig by remember {
+            com.nuvio.app.features.datasaver.DataSaverSettingsRepository.ensureLoaded()
+            com.nuvio.app.features.datasaver.DataSaverSettingsRepository.uiState
+        }.collectAsStateWithLifecycle()
         val watchPartyRowClick = watchPartyRow(onWatchPartyClick)
         NuvioScreen(
             modifier = Modifier.nestedScroll(rootSearchRevealConnection),
@@ -667,6 +676,11 @@ private fun MobileSettingsScreen(
                     isTablet = false,
                     page = page,
                     onPageChange = onPageChange,
+                )
+                SettingsPage.PlaybackDataSaver -> dataSaverSettingsContent(
+                    config = dataSaverConfig,
+                    playback = dataSaverPlayback,
+                    isTablet = false,
                 )
                 SettingsPage.Streams -> streamsSettingsContent(
                     isTablet = false,
@@ -980,6 +994,14 @@ private fun TabletSettingsScreen(
                     listState.animateScrollToItem(0)
                 }
             }
+            val dataSaverPlayback by remember {
+                com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.ensureLoaded()
+                com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.uiState
+            }.collectAsStateWithLifecycle()
+            val dataSaverConfig by remember {
+                com.nuvio.app.features.datasaver.DataSaverSettingsRepository.ensureLoaded()
+                com.nuvio.app.features.datasaver.DataSaverSettingsRepository.uiState
+            }.collectAsStateWithLifecycle()
             val watchPartyRowClick = watchPartyRow(onWatchPartyClick)
             LazyColumn(
                 state = listState,
@@ -1070,6 +1092,11 @@ private fun TabletSettingsScreen(
                         isTablet = true,
                         page = page,
                         onPageChange = ::openInlinePage,
+                    )
+                    SettingsPage.PlaybackDataSaver -> dataSaverSettingsContent(
+                        config = dataSaverConfig,
+                        playback = dataSaverPlayback,
+                        isTablet = true,
                     )
                     SettingsPage.Streams -> streamsSettingsContent(
                         isTablet = true,

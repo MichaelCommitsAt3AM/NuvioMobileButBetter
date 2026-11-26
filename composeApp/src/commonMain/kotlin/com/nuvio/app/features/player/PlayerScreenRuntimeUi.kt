@@ -307,6 +307,14 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
                     },
                     onError = { message ->
                         if (!active.value || playbackKey != activePlaybackKey) return@PlatformPlayerSurface
+                        if (isUnsupportedDolbyVisionError(message)) {
+                            handleUnsupportedDolbyVision()
+                            return@PlatformPlayerSurface
+                        }
+                        // Readiness after the Dolby Vision report must not clear its message.
+                        if (message == null && dolbyVisionBlockedSourceUrl == activeSourceUrl) {
+                            return@PlatformPlayerSurface
+                        }
                         val capabilityError = message?.takeIf { it.contains("NO_EXCEEDS_CAPABILITIES") }
                         // In Auto, give the alternate engine a chance on the same stream first.
                         if (capabilityError != null &&
@@ -833,6 +841,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         onSourceStreamSelected = { stream ->
             decoderRetryJob?.cancel()
             decoderFailedSourceKeys.clear()
+            resetDolbyVisionFallback()
             switchToSource(stream)
         },
         onReloadSources = {

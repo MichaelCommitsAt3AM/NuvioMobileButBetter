@@ -10,7 +10,8 @@ internal enum class PlaybackSection(
 ) {
     Player(SettingsPage.PlaybackPlayer, Res.string.settings_playback_page_player_description),
     StreamSelection(SettingsPage.PlaybackStreamSelection, Res.string.settings_playback_page_stream_selection_description),
-    UpNext(SettingsPage.PlaybackUpNext, Res.string.settings_playback_page_up_next_description),
+    DataSaver(SettingsPage.PlaybackDataSaver, Res.string.settings_playback_page_data_saver_description),
+    UpNext(SettingsPage.PlaybackUpNext,Res.string.settings_playback_page_up_next_description),
     SkipSegments(SettingsPage.PlaybackSkipSegments, Res.string.settings_playback_page_skip_description),
     Interface(SettingsPage.PlaybackInterface, Res.string.settings_playback_page_interface_description),
     TouchControls(SettingsPage.TouchControls, Res.string.settings_playback_touch_gestures_description),

@@ -34,11 +34,11 @@ internal data class PlayerSurfaceGestureCallbacks(
     val commitHorizontalSeek: State<(Long) -> Unit>,
 )
 
-internal fun PlayerScreenRuntime.showGestureFeedback(feedback: GestureFeedbackState) {
+internal fun PlayerScreenRuntime.showGestureFeedback(feedback: GestureFeedbackState, durationMs: Long = 900) {
     gestureMessageJob?.cancel()
     gestureFeedback = feedback
     gestureMessageJob = scope.launch {
-        delay(900)
+        delay(durationMs)
         gestureFeedback = null
     }
 }

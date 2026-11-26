@@ -257,6 +257,12 @@ internal class PlayerScreenRuntime(
     val sourceFallbackTriedKeys = mutableSetOf<String>()
     var sourceFallbackJob: Job? = null
 
+    /** Source the engine reported as Dolby Vision this device cannot show; its later "no error" reports are ignored. */
+    var dolbyVisionBlockedSourceUrl: String? = null
+    var dolbyVisionFallbackJob: Job? = null
+    var dolbyVisionFallbackAttempts = 0
+    val dolbyVisionTriedKeys = mutableSetOf<String>()
+
     var showAudioModal by mutableStateOf(false)
     var showSubtitleModal by mutableStateOf(false)
     var showVideoSettingsModal by mutableStateOf(false)

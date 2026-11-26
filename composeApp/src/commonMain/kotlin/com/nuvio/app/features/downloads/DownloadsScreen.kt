@@ -89,6 +89,7 @@ fun DownloadsScreen(
         WatchedRepository.ensureLoaded()
         WatchedRepository.uiState
     }.collectAsStateWithLifecycle()
+    val preparations by DownloadPreparationRepository.items.collectAsStateWithLifecycle()
     LaunchedEffect(uiState.completedItems.size) {
         DownloadsRepository.markCompletedSeen()
     }
@@ -142,17 +143,20 @@ fun DownloadsScreen(
                             )
                         }
                     }
-                    IconButton(
-                        onClick = {
-                            if (!DownloadsPlatformDownloader.openDownloadsDirectory()) {
-                                NuvioToastController.show(openDownloadsDirectoryFailedText)
-                            }
-                        },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Folder,
-                            contentDescription = stringResource(Res.string.downloads_open_directory),
-                        )
+                    // iOS only: Android file managers cannot open the app's private downloads folder.
+                    if (com.nuvio.app.isIos) {
+                        IconButton(
+                            onClick = {
+                                if (!DownloadsPlatformDownloader.openDownloadsDirectory()) {
+                                    NuvioToastController.show(openDownloadsDirectoryFailedText)
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Folder,
+                                contentDescription = stringResource(Res.string.downloads_open_directory),
+                            )
+                        }
                     }
                 },
             )
@@ -167,6 +171,7 @@ fun DownloadsScreen(
         } else if (showId == null) {
             downloadsRootContent(
                 items = uiState.items,
+                preparations = preparations,
                 speeds = speeds,
                 watchStatusOf = watchStatusOf,
                 onPlay = onOpenDownload,
@@ -180,6 +185,7 @@ fun DownloadsScreen(
                 episodes = uiState.items
                     .filter { it.isEpisode && it.parentMetaId == showId }
                     .sortedForSeriesDownloads(),
+                preparations = preparations.filter { it.display.parentMetaId == showId },
                 speeds = speeds,
                 watchStatusOf = watchStatusOf,
                 onPlay = onOpenDownload,
@@ -214,13 +220,14 @@ fun DownloadsScreen(
 
 private fun LazyListScope.downloadsRootContent(
     items: List<DownloadItem>,
+    preparations: List<DownloadPreparation>,
     speeds: Map<String, Long>,
     watchStatusOf: (DownloadItem) -> DownloadWatchStatus,
     onPlay: (DownloadItem) -> Unit,
     onOpenShow: (DownloadItem) -> Unit,
     onOpenActions: (DownloadItem) -> Unit,
 ) {
-    if (items.isEmpty()) {
+    if (items.isEmpty() && preparations.isEmpty()) {
         item(key = "empty") {
             DownloadsEmptyState(
                 title = stringResource(Res.string.downloads_empty_title),
@@ -243,7 +250,7 @@ private fun LazyListScope.downloadsRootContent(
         )
     }
 
-    if (activeItems.isNotEmpty()) {
+    if (activeItems.isNotEmpty() || preparations.isNotEmpty()) {
         item(key = "active_header") {
             val hasDownloading = activeItems.any { it.status == DownloadStatus.Downloading }
             val hasPaused = activeItems.any { it.status == DownloadStatus.Paused }
@@ -262,6 +269,13 @@ private fun LazyListScope.downloadsRootContent(
                         DownloadsRepository.resumePausedDownloads()
                     }
                 },
+            )
+        }
+        items(items = preparations, key = { it.id }) { preparation ->
+            PreparingDownloadRow(
+                preparation = preparation,
+                inShowPage = false,
+                onDismiss = { DownloadPreparationRepository.dismiss(preparation.id) },
             )
         }
         items(items = activeItems, key = { it.id }) { item ->
@@ -301,11 +315,19 @@ private fun LazyListScope.downloadsRootContent(
 
 private fun LazyListScope.downloadsShowContent(
     episodes: List<DownloadItem>,
+    preparations: List<DownloadPreparation>,
     speeds: Map<String, Long>,
     watchStatusOf: (DownloadItem) -> DownloadWatchStatus,
     onPlay: (DownloadItem) -> Unit,
     onOpenActions: (DownloadItem) -> Unit,
 ) {
+    items(items = preparations, key = { it.id }) { preparation ->
+        PreparingDownloadRow(
+            preparation = preparation,
+            inShowPage = true,
+            onDismiss = { DownloadPreparationRepository.dismiss(preparation.id) },
+        )
+    }
     if (episodes.isEmpty()) {
         item(key = "empty") {
             DownloadsEmptyState(title = stringResource(Res.string.downloads_empty_title))

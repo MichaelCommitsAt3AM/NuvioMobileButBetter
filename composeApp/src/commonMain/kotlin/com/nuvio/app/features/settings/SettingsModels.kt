@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.QueuePlayNext
+import androidx.compose.material.icons.filled.DataSaverOn
 import androidx.compose.material.icons.filled.RoundedCorner
 import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.Subtitles
@@ -99,6 +100,11 @@ internal enum class SettingsPage(
     ),
     PlaybackStreamSelection(
         titleRes = Res.string.settings_playback_page_stream_selection,
+        category = SettingsCategory.Watch,
+        parentPage = Playback,
+    ),
+    PlaybackDataSaver(
+        titleRes = Res.string.settings_playback_page_data_saver,
         category = SettingsCategory.Watch,
         parentPage = Playback,
     ),
@@ -276,6 +282,7 @@ internal val SettingsPage.icon: ImageVector
         SettingsPage.TouchControls -> Icons.Rounded.TouchApp
         SettingsPage.PlaybackPlayer -> Icons.Default.SmartDisplay
         SettingsPage.PlaybackStreamSelection -> Icons.AutoMirrored.Filled.PlaylistPlay
+        SettingsPage.PlaybackDataSaver -> Icons.Default.DataSaverOn
         SettingsPage.PlaybackUpNext -> Icons.Default.QueuePlayNext
         SettingsPage.PlaybackSkipSegments -> Icons.Default.FastForward
         SettingsPage.PlaybackInterface -> Icons.Default.Layers

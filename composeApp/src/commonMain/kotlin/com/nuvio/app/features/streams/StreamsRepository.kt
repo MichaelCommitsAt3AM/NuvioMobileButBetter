@@ -279,6 +279,9 @@ object StreamsRepository {
                 serverSources.size
 
             val installedAddonNames = installedAddonOrder.toSet()
+            // Data Saver turns file sizes into bitrates with the runtime, from the details already loaded.
+            val autoPlayRuntimeSeconds = MetaDetailsRepository.peek(type, parentMetaId ?: videoId)
+                ?.let { meta -> com.nuvio.app.features.downloads.DownloadRuntimeResolver.runtimeSeconds(meta, videoId) }
             val installedAddonIds = streamAddons.map { it.addonId }.toSet()
             var autoSelectTriggered = false
             var timeoutElapsed = false
@@ -298,6 +301,7 @@ object StreamsRepository {
                     activeResolverProviderId = debridSettings.activeResolverProviderId,
                     contentTitle = contentTitle,
                     preferMatchingReleaseTitles = debridSettings.streamPreferences.preferMatchingReleaseTitles,
+                    runtimeSeconds = autoPlayRuntimeSeconds,
                 )
 
             fun settleAutoPlay(evaluation: StreamAutoPlayEvaluation) {

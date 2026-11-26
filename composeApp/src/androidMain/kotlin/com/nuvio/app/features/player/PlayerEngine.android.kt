@@ -267,6 +267,9 @@ private fun ExoPlayerSurface(
     val latestOnInitialPositionHandled = rememberUpdatedState(onInitialPositionHandled)
     val latestPlayWhenReady = rememberUpdatedState(playWhenReady)
     val coroutineScope = rememberCoroutineScope()
+    val latestSourceUrl = rememberUpdatedState(sourceUrl)
+    // Source already reported as Dolby Vision this device cannot show, so it is reported once.
+    val dolbyVisionReportedSourceUrl = remember { mutableStateOf<String?>(null) }
 
     val playerSettings = remember {
         PlayerSettingsRepository.ensureLoaded()
@@ -971,6 +974,26 @@ private fun ExoPlayerSurface(
                     .firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
                     ?.let { group -> (0 until group.length).firstOrNull(group::isTrackSelected)?.let(group::getTrackFormat) }
                 (loadControl as? DynamicBackBufferLoadControl)?.updateBackBufferForVideoFormat(selectedVideoFormat)
+                // A Dolby Vision track with no decoder and no base layer to fall back to plays as
+                // a black screen with sound (or is left unselected), so report it instead.
+                val videoFormat = selectedVideoFormat ?: tracks.groups
+                    .firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.length > 0 }
+                    ?.getTrackFormat(0)
+                if (videoFormat?.isUnsupportedDolbyVision() == true &&
+                    dolbyVisionReportedSourceUrl.value != latestSourceUrl.value
+                ) {
+                    dolbyVisionReportedSourceUrl.value = latestSourceUrl.value
+                    Log.w(
+                        TAG,
+                        "Unsupported Dolby Vision (codecs=${videoFormat.codecs}, " +
+                            "profile=${videoFormat.dolbyVisionProfile()}); asking for another source",
+                    )
+                    exoPlayer.playWhenReady = false
+                    latestOnError.value(
+                        "$DOLBY_VISION_UNSUPPORTED_ERROR profile=${videoFormat.dolbyVisionProfile() ?: "unknown"}",
+                    )
+                    return
+                }
                 pendingAudioTrackSelection.firstOrNull()?.let { selection ->
                     if (tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }) {
                         pendingAudioTrackSelection.clear()

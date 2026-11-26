@@ -67,7 +67,8 @@ internal fun PlayerScreenRuntime.restartSourceFallback(
     autoSelection: PlayerSourceFallbackTried?,
 ) {
     sourceFallbackJob?.cancel()
-    autoSelectedSourceUrl = sourceUrl.takeIf { autoSelection != null && it.isNotBlank() }
+    resetDolbyVisionFallback()
+    autoSelectedSourceUrl =sourceUrl.takeIf { autoSelection != null && it.isNotBlank() }
     sourceFallbackAttempts = autoSelection?.attempts ?: 0
     sourceFallbackTriedKeys.clear()
     autoSelection?.let { tried -> sourceFallbackTriedKeys += tried.keys }

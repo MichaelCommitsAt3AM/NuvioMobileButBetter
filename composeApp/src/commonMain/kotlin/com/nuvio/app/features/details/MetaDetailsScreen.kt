@@ -784,6 +784,8 @@ fun MetaDetailsScreen(
                 // A plain holder, not state: progress ticks several times a second and must not recompose the screen.
                 val heroTrailerResume = remember(meta.id) { LongArray(1) }
                 var heroTrailerUserPaused by remember(meta.id) { mutableStateOf(false) }
+                // Moves the hero trailer to where full screen left off, once its frame is back.
+                var heroTrailerSeek by remember(meta.id) { mutableStateOf<HeroTrailerSeekRequest?>(null) }
                 val heroTrailerMuted by HeroTrailerAudioState.muted.collectAsStateWithLifecycle()
                 val onBackFromDetails: () -> Unit = {
                     isLeavingDetails = true
@@ -860,7 +862,12 @@ fun MetaDetailsScreen(
                 // "Trailer" badge, and tapping it plays the trailer.
                 val titleInProgress = playButtonLabel == resumeText ||
                     ((meta.type == "series" || hasEpisodes) && (seriesAction?.resumePositionMs ?: 0L) > 0L)
-                val deviceBlocksAutoplay = rememberHeroTrailerAutoplayBlocked()
+                val dataSaverPlayback by remember {
+                    com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.ensureLoaded()
+                    com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.uiState
+                }.collectAsStateWithLifecycle()
+                // The app's Data Saver switch blocks it like the device's own Data Saver does.
+                val deviceBlocksAutoplay = rememberHeroTrailerAutoplayBlocked() || dataSaverPlayback.enabled
                 val heroTrailerAutoplayBlocked = (titleInProgress || deviceBlocksAutoplay) && !heroTrailerUserRequested
                 LaunchedEffect(meta.id) {
                     heroTrailerAutoplayDelayElapsed = false
@@ -1336,6 +1343,8 @@ fun MetaDetailsScreen(
                                                 heroTrailerUserPaused = heroTrailerUserPaused,
                                                 onHeroTrailerUserPausedToggle = { heroTrailerUserPaused = !heroTrailerUserPaused },
                                                 onHeroTrailerProgress = { position, _ -> heroTrailerResume[0] = position },
+                                                heroTrailerSeekRequest = heroTrailerSeek,
+                                                onHeroTrailerSeekHandled = { heroTrailerSeek = null },
                                                 onHeroTrailerFullscreen = heroTrailerCandidate?.let { trailer ->
                                                     {
                                                         // Reuse the stream the hero already resolved: opens instantly, no second YouTube lookup.
@@ -1667,6 +1676,17 @@ fun MetaDetailsScreen(
                                 },
                                 startFullscreen = trailerFromHeroFullscreen,
                                 startPositionMs = trailerStartPositionMs,
+                                onFullscreenClosed = { positionMs, ended ->
+                                    if (trailerFromHeroFullscreen) {
+                                        if (ended) {
+                                            // Watched to the end: the hero is done with it too.
+                                            onHeroTrailerFinished()
+                                        } else if (positionMs > 0L) {
+                                            heroTrailerResume[0] = positionMs
+                                            heroTrailerSeek = HeroTrailerSeekRequest(positionMs, trailerRequestToken)
+                                        }
+                                    }
+                                },
                             )
                         }
 

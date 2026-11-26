@@ -178,6 +178,13 @@ fun QualityDownloadSheet(
                                         },
                                         enabled = startingTier == null,
                                         onClick = {
+                                            // Dolby Vision on a device that may not play it: checked in the
+                                            // background, with progress on the Downloads screen.
+                                            if (DownloadPreparationRepository.needsCheck(option)) {
+                                                DownloadPreparationRepository.start(result, option)
+                                                dismiss()
+                                                return@QualityOptionRow
+                                            }
                                             startingTier = option.tier
                                             scope.launch {
                                                 try {

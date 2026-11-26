@@ -33,7 +33,12 @@ internal actual object SubtitleFontStorage {
         target.parentFile?.mkdirs()
         val temporary = File(target.path + ".tmp")
         temporary.writeBytes(bytes)
-        check(temporary.renameTo(target))
+        // Android replaces the target on rename; some file systems (Windows, where the host
+        // tests run) refuse while it exists, so remove it and retry.
+        if (!temporary.renameTo(target)) {
+            target.delete()
+            check(temporary.renameTo(target))
+        }
     }
 
     actual fun remove(name: String) { file(name).delete() }

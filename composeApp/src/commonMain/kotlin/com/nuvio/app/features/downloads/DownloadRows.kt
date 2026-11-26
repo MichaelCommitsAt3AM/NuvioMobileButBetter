@@ -12,10 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.HourglassTop
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,7 +40,12 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.nuvioTypeScale
 import com.nuvio.app.core.ui.themePalette
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.action_close
 import nuvio.composeapp.generated.resources.action_resume
+import nuvio.composeapp.generated.resources.downloads_preparing_checking
+import nuvio.composeapp.generated.resources.downloads_preparing_finding
+import nuvio.composeapp.generated.resources.downloads_preparing_none
+import nuvio.composeapp.generated.resources.downloads_preparing_switched
 import nuvio.composeapp.generated.resources.action_retry
 import nuvio.composeapp.generated.resources.compose_action_pause
 import nuvio.composeapp.generated.resources.details_actions_menu_label
@@ -356,4 +365,110 @@ private fun watchStatusText(status: DownloadWatchStatus): String? = when {
         "${(status.progress * 100f).toInt()}%",
     )
     else -> null
+}
+
+/**
+ * A download whose video format is being checked before it is queued (see
+ * [DownloadPreparationRepository]). Same layout as an active download: the status line says what
+ * is happening, the trailing icon shows the stage, and a failed check can be dismissed.
+ */
+@Composable
+internal fun PreparingDownloadRow(
+    preparation: DownloadPreparation,
+    inShowPage: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio
+    val item = preparation.display
+    val (statusText, statusColor) = when (preparation.stage) {
+        DownloadPreparationStage.Checking ->
+            stringResource(Res.string.downloads_preparing_checking) to tokens.colors.textMuted
+        DownloadPreparationStage.FindingCompatible ->
+            stringResource(Res.string.downloads_preparing_finding) to tokens.colors.warning
+        DownloadPreparationStage.Switched ->
+            stringResource(Res.string.downloads_preparing_switched, preparation.switchedTo.orEmpty()) to
+                tokens.colors.success
+        DownloadPreparationStage.NoCompatible ->
+            stringResource(Res.string.downloads_preparing_none) to tokens.colors.danger
+    }
+    DownloadRow(
+        artwork = {
+            DownloadThumbnail(imageUrl = item.landscapeArtwork())
+        },
+        title = if (inShowPage) item.episodeDisplayTitle() else item.title,
+        subtitle = if (inShowPage) null else item.episodeLabel(),
+        onClick = {},
+        onLongClick = null,
+        footer = {
+            Text(
+                text = statusText,
+                style = MaterialTheme.nuvioTypeScale.bodySm,
+                color = statusColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        trailing = {
+            when (preparation.stage) {
+                DownloadPreparationStage.Checking,
+                DownloadPreparationStage.FindingCompatible -> PreparingIndicator(
+                    icon = if (preparation.stage == DownloadPreparationStage.Checking) {
+                        Icons.Rounded.HourglassTop
+                    } else {
+                        Icons.Rounded.Search
+                    },
+                )
+                DownloadPreparationStage.Switched -> Icon(
+                    imageVector = Icons.Rounded.SwapHoriz,
+                    contentDescription = null,
+                    tint = tokens.colors.success,
+                    modifier = Modifier.padding(horizontal = NuvioTokens.Space.s12),
+                )
+                DownloadPreparationStage.NoCompatible -> IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(Res.string.action_close),
+                        tint = tokens.colors.textSecondary,
+                    )
+                }
+            }
+        },
+    )
+}
+
+/** Indeterminate accent ring around a stage icon, sized like the transfer button. */
+@Composable
+private fun PreparingIndicator(icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    val tokens = MaterialTheme.nuvio
+    val strokeWidth = NuvioTokens.Space.s2
+    val trackColor = tokens.colors.borderStrong
+    Box(
+        modifier = Modifier
+            .padding(NuvioTokens.Space.s8)
+            .size(NuvioTokens.Space.s32)
+            .drawBehind {
+                val strokePx = strokeWidth.toPx()
+                drawCircle(
+                    color = trackColor,
+                    radius = (size.minDimension - strokePx) / 2f,
+                    style = Stroke(width = strokePx),
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier
+                .size(NuvioTokens.Space.s32)
+                .gradientMask(MaterialTheme.themePalette.accentBrush()),
+            color = Color.White,
+            strokeWidth = strokeWidth,
+            trackColor = Color.Transparent,
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tokens.colors.textPrimary,
+            modifier = Modifier.size(NuvioTokens.Icon.sm),
+        )
+    }
 }

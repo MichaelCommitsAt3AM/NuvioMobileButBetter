@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import coil3.compose.AsyncImage
 import com.nuvio.app.features.details.HeroTrailerPlaybackConfig
+import com.nuvio.app.features.details.HeroTrailerSeekRequest
 import kotlinx.coroutines.delay
 import com.nuvio.app.core.ui.focusedAlignment
 import com.nuvio.app.core.ui.rememberBackdropFocusState
@@ -99,6 +100,9 @@ fun DetailHero(
     onHeroTrailerUserPausedToggle: () -> Unit = {},
     onHeroTrailerProgress: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
     onHeroTrailerFullscreen: (() -> Unit)? = null,
+    /** A one-off jump asked for from outside the frame; [onHeroTrailerSeekHandled] once taken. */
+    heroTrailerSeekRequest: HeroTrailerSeekRequest? = null,
+    onHeroTrailerSeekHandled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(
@@ -309,6 +313,8 @@ fun DetailHero(
                                 },
                                 onError = onHeroTrailerError,
                                 onFullscreen = onHeroTrailerFullscreen,
+                                externalSeekRequest = heroTrailerSeekRequest,
+                                onExternalSeekHandled = onHeroTrailerSeekHandled,
                             )
                         }
                     }

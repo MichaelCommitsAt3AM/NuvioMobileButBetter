@@ -76,8 +76,8 @@ import com.nuvio.app.core.ui.featherArtwork
 import com.nuvio.app.core.ui.rememberArtworkBackdrop
 import com.nuvio.app.features.downloads.DownloadFilterResult
 import com.nuvio.app.features.details.MetaDetailsRepository
-import com.nuvio.app.features.downloads.DownloadFilterSettingsRepository
 import com.nuvio.app.features.downloads.DownloadRuntimeResolver
+import com.nuvio.app.features.datasaver.listFilter
 import com.nuvio.app.features.downloads.DownloadStreamFilter
 import com.nuvio.app.features.downloads.DownloadStreamFilterMode
 import com.nuvio.app.features.downloads.DownloadsRepository
@@ -728,10 +728,18 @@ internal fun StreamList(
 ) {
     val baseGroups = uiState.filteredGroups
     val isDataSaver = uiState.downloadFilterMode == DownloadStreamFilterMode.DATA_SAVER
-    val downloadFilterConfig by remember {
-        DownloadFilterSettingsRepository.ensureLoaded()
-        DownloadFilterSettingsRepository.uiState
+    val dataSaverRules by remember {
+        com.nuvio.app.features.datasaver.DataSaverSettingsRepository.ensureLoaded()
+        com.nuvio.app.features.datasaver.DataSaverSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
+    val dataSaverPlayback by remember {
+        com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.ensureLoaded()
+        com.nuvio.app.features.datasaver.DataSaverPlaybackRepository.uiState
+    }.collectAsStateWithLifecycle()
+    // Data Saver's bitrate limits come from its targets.
+    val downloadFilterConfig = remember(dataSaverRules, dataSaverPlayback) {
+        dataSaverPlayback.listFilter(dataSaverRules)
+    }
     val metaDetailsState by MetaDetailsRepository.uiState.collectAsStateWithLifecycle()
     val runtimeSeconds = remember(metaDetailsState.meta, uiState.contentVideoId) {
         DownloadRuntimeResolver.runtimeSeconds(metaDetailsState.meta, uiState.contentVideoId)

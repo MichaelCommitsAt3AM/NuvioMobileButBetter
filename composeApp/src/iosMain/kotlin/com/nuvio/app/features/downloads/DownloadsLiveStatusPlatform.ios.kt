@@ -16,6 +16,9 @@ internal actual object DownloadsLiveStatusPlatform {
 
     private var lastPayload: String? = null
 
+    // iPhones decode Dolby Vision, so the check that raises this never fails there.
+    actual fun notifyNoCompatibleVersion(item: DownloadItem, message: String) = Unit
+
     actual fun onItemsChanged(items: List<DownloadItem>) {
         val primary = items
             .filter { item ->

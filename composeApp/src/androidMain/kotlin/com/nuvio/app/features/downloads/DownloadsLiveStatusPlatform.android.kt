@@ -19,6 +19,7 @@ import org.jetbrains.compose.resources.getString
 
 internal actual object DownloadsLiveStatusPlatform {
     private const val channelId = "downloads_live_status"
+    private const val alertsChannelId = "downloads_alerts"
     private const val notificationsPrefName = "nuvio_download_live_notifications"
     private const val trackedDownloadIdsKey = "tracked_download_ids"
 
@@ -91,6 +92,61 @@ internal actual object DownloadsLiveStatusPlatform {
             manager.cancel(notificationId(if (active) "inactive:${item.id}" else item.id))
             manager.notify(notificationId(if (active) item.id else "inactive:${item.id}"), buildNotification(context, item))
         }
+    }
+
+    /**
+     * One-off alert, on its own channel at default importance so it is not silent like progress:
+     * the download of [item] was not started because no version plays on this device.
+     */
+    actual fun notifyNoCompatibleVersion(item: DownloadItem, message: String) {
+        val context = appContext ?: return
+        if (!canPostNotifications(context)) return
+        ensureAlertsChannel(context)
+        val launchIntent = Intent().apply {
+            component = AppIconPlatform.currentLauncherComponent(context)
+            action = Intent.ACTION_VIEW
+            data = android.net.Uri.parse(buildDownloadsDeepLinkUrl())
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val key = "no-compatible:${item.parentMetaId}:${item.seasonNumber}:${item.episodeNumber}"
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId(key),
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val title = listOfNotNull(item.title, item.episodeCodeOrNull()).joinToString(" · ")
+        val notification = NotificationCompat.Builder(context, alertsChannelId)
+            .setSmallIcon(com.nuvio.app.R.drawable.ic_notification_small)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        NotificationManagerCompat.from(context).notify(notificationId(key), notification)
+    }
+
+    private fun DownloadItem.episodeCodeOrNull(): String? =
+        if (seasonNumber != null && episodeNumber != null) "S$seasonNumber E$episodeNumber" else null
+
+    private fun ensureAlertsChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        if (manager.getNotificationChannel(alertsChannelId) != null) return
+        manager.createNotificationChannel(
+            NotificationChannel(
+                alertsChannelId,
+                runBlocking { getString(Res.string.downloads_alerts_channel_name) },
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = runBlocking { getString(Res.string.downloads_alerts_channel_description) }
+            },
+        )
     }
 
     internal fun removeNotification(downloadId: String) {

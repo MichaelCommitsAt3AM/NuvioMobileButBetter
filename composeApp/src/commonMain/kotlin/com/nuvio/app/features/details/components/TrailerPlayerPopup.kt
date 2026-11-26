@@ -58,6 +58,8 @@ fun TrailerPlayerPopup(
     startFullscreen: Boolean = false,
     /** Where playback starts, e.g. the hero trailer's position. */
     startPositionMs: Long = 0L,
+    /** Where playback had got to, reported just before a player opened in full screen closes. */
+    onFullscreenClosed: (positionMs: Long, ended: Boolean) -> Unit = { _, _ -> },
 ) {
     if (!visible) return
 
@@ -87,6 +89,7 @@ fun TrailerPlayerPopup(
     val exitFullscreen = {
         if (isIos || startFullscreen) {
             playbackState.controller?.pause()
+            onFullscreenClosed(playbackState.snapshot.positionMs, playbackState.snapshot.isEnded)
             onDismiss()
         } else {
             toggleFullscreen()

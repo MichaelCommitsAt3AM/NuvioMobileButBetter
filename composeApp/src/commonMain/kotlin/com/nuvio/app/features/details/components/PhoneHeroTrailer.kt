@@ -93,6 +93,8 @@ internal fun BoxScope.PhoneHeroTrailerFrame(
     onProgress: (positionMs: Long, durationMs: Long) -> Unit,
     onError: () -> Unit,
     onFullscreen: (() -> Unit)? = null,
+    externalSeekRequest: HeroTrailerSeekRequest? = null,
+    onExternalSeekHandled: () -> Unit = {},
 ) {
     val topOffset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
         HeroTrailerPlaybackConfig.FRAME_TOP_OFFSET_DP.dp
@@ -101,6 +103,17 @@ internal fun BoxScope.PhoneHeroTrailerFrame(
     var seekRequest by remember { mutableStateOf<HeroTrailerSeekRequest?>(null) }
     var seekToken by remember { mutableIntStateOf(0) }
     var buffering by remember { mutableStateOf(false) }
+    val seekTo: (Long) -> Unit = { target ->
+        seekToken += 1
+        seekRequest = HeroTrailerSeekRequest(target, seekToken)
+        onProgress(target, durationMs())
+    }
+    LaunchedEffect(externalSeekRequest?.token) {
+        externalSeekRequest?.let {
+            seekTo(it.positionMs)
+            onExternalSeekHandled()
+        }
+    }
 
     // Hide the controls once the frame fades out, and a few seconds after the last interaction.
     LaunchedEffect(Unit) {
@@ -211,11 +224,7 @@ internal fun BoxScope.PhoneHeroTrailerFrame(
             durationMs = durationMs,
             onMuteToggle = onMuteToggle,
             onSeekingChanged = { seeking = it },
-            onSeek = { target ->
-                seekToken += 1
-                seekRequest = HeroTrailerSeekRequest(target, seekToken)
-                onProgress(target, durationMs())
-            },
+            onSeek = seekTo,
         )
     }
 }

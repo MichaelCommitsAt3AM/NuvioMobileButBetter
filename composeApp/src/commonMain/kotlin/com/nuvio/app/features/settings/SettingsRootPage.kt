@@ -2,9 +2,18 @@ package com.nuvio.app.features.settings
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.features.datasaver.DataSaverPlaybackRepository
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -16,6 +25,12 @@ internal fun LazyListScope.settingsRootContent(
     onWatchPartyClick: (() -> Unit)? = null,
     category: SettingsCategory? = null,
 ) {
+    // First on the phone's list; with the tablet's categories, at the top of Watch.
+    if (category == null || category == SettingsCategory.Watch) {
+        item(key = "data_saver_shortcut") {
+            DataSaverShortcutCard(isTablet = isTablet, onPageClick = onPageClick)
+        }
+    }
     SettingsCategory.entries.filter { category == null || it == category }.forEach { group ->
         item(key = group.name) {
             SettingsGroup(isTablet = isTablet) {
@@ -120,6 +135,43 @@ internal fun LazyListScope.settingsRootContent(
         }
     }
     settingsFooterContent(isTablet = isTablet)
+}
+
+/** Data Saver's switch and the way into its page, without going through Playback. */
+@Composable
+private fun DataSaverShortcutCard(
+    isTablet: Boolean,
+    onPageClick: (SettingsPage) -> Unit,
+) {
+    val playback by remember {
+        DataSaverPlaybackRepository.ensureLoaded()
+        DataSaverPlaybackRepository.uiState
+    }.collectAsStateWithLifecycle()
+    SettingsGroup(isTablet = isTablet) {
+        SettingsSwitchRow(
+            title = stringResource(Res.string.data_saver_enabled_title),
+            description = stringResource(Res.string.data_saver_shortcut_desc),
+            checked = playback.enabled,
+            isTablet = isTablet,
+            icon = SettingsPage.PlaybackDataSaver.icon,
+            onCheckedChange = DataSaverPlaybackRepository::setEnabled,
+        )
+        SettingsGroupDivider(isTablet = isTablet)
+        SettingsNavigationRow(
+            title = stringResource(Res.string.data_saver_shortcut_settings_title),
+            description = stringResource(Res.string.data_saver_shortcut_settings_desc),
+            icon = Icons.Rounded.Tune,
+            isTablet = isTablet,
+            trailingContent = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.nuvio.colors.textMuted,
+                )
+            },
+            onClick = { onPageClick(SettingsPage.PlaybackDataSaver) },
+        )
+    }
 }
 
 @Composable
