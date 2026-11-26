@@ -7,6 +7,12 @@ import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.servers.ServerCatalog
 import com.nuvio.app.features.servers.ServerRepository
 import kotlinx.atomicfu.atomic
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,6 +96,16 @@ private data class StoredHomeCatalogSettingsPayload(
 object HomeCatalogSettingsRepository {
     const val HERO_SOURCE_SELECTION_LIMIT = 2
 
+    /**
+     * How long the catalog list has to sit still with no featured source before one is picked. Add-ons
+     * load one after another at startup, so picking straight away would favour whichever arrived first.
+     * Tests set it to 0 to pick synchronously.
+     */
+    internal var heroAutoSelectDelayMillis: Long = 2_000L
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var heroAutoSelectJob: Job? = null
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -126,6 +142,7 @@ object HomeCatalogSettingsRepository {
         lastCatalogSync = null
         lastCollectionSync = null
         catalogsPending = false
+        cancelHeroAutoSelect()
         _uiState.value = HomeCatalogSettingsUiState()
     }
 
@@ -136,6 +153,7 @@ object HomeCatalogSettingsRepository {
         lastCatalogSync = null
         lastCollectionSync = null
         catalogsPending = false
+        cancelHeroAutoSelect()
         preferences = emptyMap()
         heroEnabled = true
         showCatalogType = true
@@ -167,14 +185,57 @@ object HomeCatalogSettingsRepository {
 
     /**
      * The only time a featured source is picked for the user: with none selected the carousel would have
-     * nothing to show, so take the first catalog in Home order. With no catalogs there is nothing to
-     * pick, and while some are still loading the user's own choice may be among them.
+     * nothing to show. With no catalogs there is nothing to pick, and while some are still loading the
+     * user's own choice may be among them. The pick waits [heroAutoSelectDelayMillis] (restarting on every
+     * catalog change) so it is made from the full add-on set rather than the first add-on to load.
      */
-    private fun selectFirstHeroSourceIfNone() {
-        if (catalogsPending || selectedHeroSourceCount() > 0) return
-        val catalogKeys = definitions.mapTo(mutableSetOf()) { it.key }
-        val first = preferences.values.filter { it.key in catalogKeys }.minByOrNull { it.order } ?: return
+    private fun scheduleHeroAutoSelect() {
+        if (catalogsPending || selectedHeroSourceCount() > 0) {
+            cancelHeroAutoSelect()
+            return
+        }
+        val delayMillis = heroAutoSelectDelayMillis
+        if (delayMillis <= 0) {
+            cancelHeroAutoSelect()
+            selectFirstHeroSourceIfNone()
+            return
+        }
+        heroAutoSelectJob?.cancel()
+        heroAutoSelectJob = scope.launch {
+            delay(delayMillis)
+            if (selectFirstHeroSourceIfNone()) {
+                publish()
+                persist()
+                HomeRepository.applyCurrentSettings()
+            }
+        }
+    }
+
+    private fun cancelHeroAutoSelect() {
+        heroAutoSelectJob?.cancel()
+        heroAutoSelectJob = null
+    }
+
+    /**
+     * Picks the best catalog: movie/series before other types, content add-ons before stream add-ons
+     * (see [HomeCatalogDefinition.defaultRank]), then Home order. Without this an add-on installed early
+     * with its own lists (e.g. Torrentio's "TorBox Torrents - Other") would win over real metadata
+     * catalogs further down. Returns whether a source was selected.
+     */
+    private fun selectFirstHeroSourceIfNone(): Boolean {
+        if (catalogsPending || selectedHeroSourceCount() > 0) return false
+        val definitionsByKey = definitions.associateBy { it.key }
+        val first = preferences.values
+            .filter { it.key in definitionsByKey }
+            .minWithOrNull(
+                compareBy<StoredHomeCatalogPreference>(
+                    { definitionsByKey.getValue(it.key).defaultRank },
+                    { it.order },
+                ),
+            )
+            ?: return false
         preferences = preferences + (first.key to first.copy(heroSourceEnabled = true))
+        return true
     }
 
     fun syncCollections(collections: List<Collection>) {
@@ -333,28 +394,34 @@ object HomeCatalogSettingsRepository {
 
     private fun normalizePreferences() {
         val current = preferences
-        data class UnifiedEntry(val key: String, val isCollection: Boolean)
-        val catalogEntries = definitions.map { UnifiedEntry(it.key, false) }
-        val collectionEntries = collectionDefinitions.map { UnifiedEntry(it.key, true) }
+        data class UnifiedEntry(val key: String, val isCollection: Boolean, val rank: Int)
+        val catalogEntries = definitions.map { UnifiedEntry(it.key, false, it.defaultRank) }
+        val collectionEntries = collectionDefinitions.map { UnifiedEntry(it.key, true, CATALOG_PRIORITY_CONTENT) }
         val allEntries = catalogEntries + collectionEntries
         val knownKeys = allEntries.mapTo(linkedSetOf(), UnifiedEntry::key)
-        var nextOrder = (current.values.maxOfOrNull(StoredHomeCatalogPreference::order) ?: -1) + 1
 
-        val orderedEntries = allEntries.mapIndexed { defaultIndex, entry ->
-            Triple(
-                entry,
-                current[entry.key]?.order ?: (nextOrder + defaultIndex),
-                defaultIndex,
-            )
-        }.sortedWith(
-            compareBy<Triple<UnifiedEntry, Int, Int>>(
-                { it.second },
-                { it.third },
-            ),
-        ).map { it.first }
+        // Keep the user's order for entries already placed (including those of add-ons that are missing
+        // right now, so they return to the same spot). A new entry goes right after the last entry of the
+        // same or better rank (see [HomeCatalogDefinition.defaultRank]), so a newly installed add-on's
+        // movie/series catalogs land above "Other" and stream add-on catalogs (e.g. Torrentio's) instead
+        // of underneath them.
+        val placed = current.values
+            .sortedBy { it.order }
+            .mapTo(mutableListOf()) { preference -> allEntries.firstOrNull { it.key == preference.key } ?: preference.key }
+        val newEntries = allEntries.filter { it.key !in current }
+        newEntries.forEach { entry ->
+            val insertAt = placed.indexOfLast { it is UnifiedEntry && it.rank <= entry.rank } + 1
+            placed.add(insertAt, entry)
+        }
+        val renumber = newEntries.isNotEmpty()
+        val orderByKey = placed.withIndex().associate { (index, item) ->
+            (if (item is UnifiedEntry) item.key else item as String) to index
+        }
+        val orderedEntries = placed.filterIsInstance<UnifiedEntry>()
 
         val normalized = current
             .filterKeys { it !in knownKeys }
+            .mapValues { (key, preference) -> if (renumber) preference.copy(order = orderByKey.getValue(key)) else preference }
             .toMutableMap()
         var enabledHeroSourceCount = 0
         orderedEntries.forEach { entry ->
@@ -373,11 +440,11 @@ object HomeCatalogSettingsRepository {
                 customTitle = stored?.customTitle.orEmpty(),
                 enabled = stored?.enabled ?: true,
                 heroSourceEnabled = heroSourceEnabled,
-                order = stored?.order ?: nextOrder++,
+                order = if (renumber || stored == null) orderByKey.getValue(entry.key) else stored.order,
             )
         }
         preferences = normalized.toMap()
-        selectFirstHeroSourceIfNone()
+        scheduleHeroAutoSelect()
     }
 
     private fun publish() {

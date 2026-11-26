@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import com.nuvio.app.features.addons.AddonCatalog
 import com.nuvio.app.features.addons.AddonManifest
 import com.nuvio.app.features.addons.AddonRepository
+import com.nuvio.app.features.addons.AddonResource
 import com.nuvio.app.features.addons.AddonStorage
 import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.collection.Collection
@@ -53,6 +54,7 @@ class HomeCatalogSettingsRepositoryTest {
         })
         CollectionRepository.clearLocalState()
         HomeRepository.clear()
+        HomeCatalogSettingsRepository.heroAutoSelectDelayMillis = 0
         HomeCatalogSettingsRepository.clearLocalState()
         HomeCatalogSettingsRepository.setHeroEnabled(false)
     }
@@ -60,6 +62,7 @@ class HomeCatalogSettingsRepositoryTest {
     @AfterTest
     fun clearState() {
         Locale.setDefault(originalLocale)
+        HomeCatalogSettingsRepository.heroAutoSelectDelayMillis = 2_000L
         HomeCatalogSettingsRepository.clearLocalState()
         CollectionRepository.clearLocalState()
         HomeRepository.clear()
@@ -105,6 +108,96 @@ class HomeCatalogSettingsRepositoryTest {
 
         HomeCatalogSettingsRepository.resetToDefaults()
         assertEquals(listOf("first:movie:trending"), heroKeys())
+    }
+
+    private fun ManagedAddon.withResources(vararg resources: AddonResource) =
+        copy(manifest = manifest!!.copy(resources = resources.toList()))
+
+    private val streamResources = arrayOf(
+        AddonResource("stream", listOf("movie", "series")),
+        AddonResource("meta", listOf("other")),
+    )
+    private val metaResource = AddonResource("meta", listOf("movie", "series"))
+
+    private fun orderedKeys() = HomeCatalogSettingsRepository.uiState.value.items.sortedBy { it.order }.map { it.key }
+
+    @Test
+    fun contentAddonCatalogsComeBeforeStreamAddonCatalogsByDefault() {
+        val torrentio = catalogAddon("torrentio", AddonCatalog("other", "torrents", "TorBox Torrents"), AddonCatalog("other", "usenet", "TorBox Usenet"))
+            .withResources(*streamResources)
+        val metadata = catalogAddon("metadata", AddonCatalog("movie", "trending", "Trending"), AddonCatalog("series", "trending", "Trending"))
+            .withResources(metaResource)
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(torrentio, metadata))
+
+        assertEquals(
+            listOf("metadata:movie:trending", "metadata:series:trending", "torrentio:other:torrents", "torrentio:other:usenet"),
+            orderedKeys(),
+        )
+        assertEquals(listOf("metadata:movie:trending"), heroKeys())
+    }
+
+    @Test
+    fun movieAndSeriesCatalogsComeBeforeOtherCatalogsByDefault() {
+        val torrentio = catalogAddon("torrentio", AddonCatalog("other", "torrents", "TorBox Torrents"))
+            .withResources(*streamResources)
+        val metadata = catalogAddon(
+            "metadata",
+            AddonCatalog("other", "collections", "Collections"),
+            AddonCatalog("movie", "trending", "Trending"),
+            AddonCatalog("series", "trending", "Trending"),
+        ).withResources(metaResource)
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(torrentio, metadata))
+
+        assertEquals(
+            listOf("metadata:movie:trending", "metadata:series:trending", "metadata:other:collections", "torrentio:other:torrents"),
+            orderedKeys(),
+        )
+    }
+
+    @Test
+    fun aContentAddonInstalledLaterIsPlacedAboveStreamAddonCatalogs() {
+        val torrentio = catalogAddon("torrentio", AddonCatalog("other", "torrents", "TorBox Torrents"))
+            .withResources(*streamResources)
+        val metadata = catalogAddon("metadata", AddonCatalog("movie", "trending", "Trending"))
+            .withResources(metaResource)
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(torrentio))
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(torrentio, metadata))
+
+        assertEquals(listOf("metadata:movie:trending", "torrentio:other:torrents"), orderedKeys())
+    }
+
+    @Test
+    fun aMovieOrSeriesCatalogIsPreferredOverAnEarlierAddonSpecificOne() {
+        val debrid = catalogAddon("debrid", AddonCatalog("other", "torrents", "TorBox Torrents"), AddonCatalog("other", "usenet", "TorBox Usenet"))
+        val metadata = catalogAddon("metadata", AddonCatalog("movie", "trending", "Trending"), AddonCatalog("series", "trending", "Trending"))
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(debrid, metadata))
+        assertEquals(listOf("metadata:movie:trending"), heroKeys())
+    }
+
+    @Test
+    fun withOnlyAddonSpecificCatalogsTheFirstOneIsStillPicked() {
+        val debrid = catalogAddon("debrid", AddonCatalog("other", "torrents", "TorBox Torrents"))
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(debrid))
+        assertEquals(listOf("debrid:other:torrents"), heroKeys())
+    }
+
+    @Test
+    fun theAutomaticPickWaitsForTheDelayAndUsesAddonsThatArrivedMeanwhile() {
+        HomeCatalogSettingsRepository.heroAutoSelectDelayMillis = 300
+        val debrid = catalogAddon("debrid", AddonCatalog("other", "torrents", "TorBox Torrents"))
+        val metadata = catalogAddon("metadata", AddonCatalog("movie", "trending", "Trending"))
+
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(debrid))
+        assertEquals(emptyList(), heroKeys())
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(debrid, metadata))
+        assertEquals(emptyList(), heroKeys())
+
+        runBlocking {
+            withTimeout(5_000) {
+                HomeCatalogSettingsRepository.uiState.first { state -> state.items.any { it.heroSourceEnabled } }
+            }
+        }
+        assertEquals(listOf("metadata:movie:trending"), heroKeys())
     }
 
     @Test

@@ -25,9 +25,18 @@ data class HomeCatalogDefinition(
     val supportsPagination: Boolean,
     val descriptorSignature: String,
     val serverConnectionId: String? = null,
+    /** Lower comes first in the default Home order and the automatic featured pick; see [catalogSourcePriority]. */
+    val sourcePriority: Int = CATALOG_PRIORITY_OTHER,
 ) {
     val cacheKey: String
         get() = "$key|$descriptorSignature"
+
+    /**
+     * Default placement rank (lower first): movie/series catalogs before other types (e.g. "Other"),
+     * then content add-ons before stream add-ons within each.
+     */
+    val defaultRank: Int
+        get() = (if (type.lowercase() in PREFERRED_CATALOG_TYPES) 0 else 1) * (CATALOG_PRIORITY_STREAM + 1) + sourcePriority
 
     fun titleFor(showCatalogType: Boolean): String =
         if (showCatalogType) defaultTitle else catalogName
@@ -43,6 +52,25 @@ fun buildAddonCatalogRefreshSignature(addons: List<ManagedAddon>): List<String> 
         }
         signature.value()
     }.sorted()
+
+/** Catalog types that hold real titles; ranked above add-on specific ones like debrid "other" lists. */
+internal val PREFERRED_CATALOG_TYPES = setOf("movie", "series")
+
+internal const val CATALOG_PRIORITY_CONTENT = 0
+internal const val CATALOG_PRIORITY_OTHER = 1
+internal const val CATALOG_PRIORITY_STREAM = 2
+
+/**
+ * Ranks an add-on's catalogs: content (metadata) add-ons that serve movie/series details come first,
+ * and add-ons that serve streams (e.g. Torrentio with a debrid service, whose catalogs are the user's
+ * cloud files) come last, so they never crowd out real catalogs by default.
+ */
+internal fun AddonManifest.catalogSourcePriority(): Int = when {
+    resources.any { it.name == "stream" } -> CATALOG_PRIORITY_STREAM
+    resources.any { resource -> resource.name == "meta" && resource.types.any { it == "movie" || it == "series" } } ->
+        CATALOG_PRIORITY_CONTENT
+    else -> CATALOG_PRIORITY_OTHER
+}
 
 fun buildHomeCatalogDefinitions(addons: List<ManagedAddon>): List<HomeCatalogDefinition> =
     addons.enabledAddons().forKidsCatalogs().mapNotNull { addon ->
@@ -68,9 +96,10 @@ fun buildHomeCatalogDefinitions(addons: List<ManagedAddon>): List<HomeCatalogDef
                     catalogId = catalog.id,
                     supportsPagination = catalog.supportsPagination(),
                     descriptorSignature = buildHomeCatalogDescriptorSignature(addon, manifest, catalog),
+                    sourcePriority = manifest.catalogSourcePriority(),
                 )
             }
-    }.distinctBy(HomeCatalogDefinition::key) + if (KidsProfileRepository.active == null) ServerCatalog.homeDefinitions() else emptyList()
+    }.distinctBy(HomeCatalogDefinition::key).sortedBy(HomeCatalogDefinition::defaultRank) + if (KidsProfileRepository.active == null) ServerCatalog.homeDefinitions() else emptyList()
 
 private fun buildHomeCatalogDescriptorSignature(
     addon: ManagedAddon,
