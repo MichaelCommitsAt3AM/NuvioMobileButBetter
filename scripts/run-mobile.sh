@@ -172,7 +172,12 @@ build_android_apk() {
   apk_path="$(android_apk_path "$flavor")"
 
   echo "Building Android $flavor debug APK..." >&2
-  "$GRADLEW" ":androidApp:assemble${flavor_task_part}Debug" >&2
+  # Called inside $(...), where `set -e` does not apply: without the explicit exit, a failed
+  # build would carry on and install the APK left over from the last good one.
+  if ! "$GRADLEW" ":androidApp:assemble${flavor_task_part}Debug" >&2; then
+    echo "Build failed, nothing was installed." >&2
+    exit 1
+  fi
 
   if [[ ! -f "$apk_path" ]]; then
     echo "Expected APK not found at: $apk_path" >&2
