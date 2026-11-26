@@ -90,6 +90,36 @@ class HomeCatalogSettingsRepositoryTest {
         assertEquals(listOf(items.minBy { it.order }.key), items.filter { it.heroSourceEnabled }.map { it.key })
     }
 
+    private fun heroKeys() = HomeCatalogSettingsRepository.uiState.value.items.filter { it.heroSourceEnabled }.map { it.key }
+
+    @Test
+    fun onlyTheFirstCatalogIsSelectedAndLaterAddonsAreNot() {
+        val first = catalogAddon("first", AddonCatalog("movie", "trending", "Trending"), AddonCatalog("series", "trending", "Trending"))
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(first))
+        assertEquals(listOf("first:movie:trending"), heroKeys())
+
+        // One is already selected, so a newly added catalog is left off, even with a second slot free.
+        val cloud = catalogAddon("cloud", AddonCatalog("other", "files", "Files"))
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(first, cloud))
+        assertEquals(listOf("first:movie:trending"), heroKeys())
+
+        HomeCatalogSettingsRepository.resetToDefaults()
+        assertEquals(listOf("first:movie:trending"), heroKeys())
+    }
+
+    @Test
+    fun nothingIsSelectedWhileAnAddonIsStillLoading() {
+        val chosen = catalogAddon("chosen", AddonCatalog("movie", "new", "New"))
+        val other = catalogAddon("other", AddonCatalog("movie", "trending", "Trending"))
+        val loading = chosen.copy(manifest = null, isRefreshing = true)
+
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(other, loading))
+        assertEquals(emptyList(), heroKeys())
+
+        HomeCatalogSettingsRepository.syncCatalogs(listOf(other, chosen))
+        assertEquals(1, heroKeys().size)
+    }
+
     @Test
     fun anAddonSetWithoutHomeCatalogsSelectsNoHeroSource() {
         HomeCatalogSettingsRepository.syncCatalogs(listOf(catalogAddon("empty")))

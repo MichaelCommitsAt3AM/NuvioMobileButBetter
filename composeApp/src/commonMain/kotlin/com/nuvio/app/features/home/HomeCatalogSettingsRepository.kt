@@ -75,7 +75,7 @@ private data class StoredHomeCatalogPreference(
     val key: String,
     val customTitle: String = "",
     val enabled: Boolean = true,
-    val heroSourceEnabled: Boolean = true,
+    val heroSourceEnabled: Boolean = false,
     val order: Int = 0,
 )
 
@@ -103,6 +103,8 @@ object HomeCatalogSettingsRepository {
     private var collectionDefinitions: List<CollectionCatalogDefinition> = emptyList()
     private var lastCatalogSync: CatalogSyncInput? = null
     private var lastCollectionSync: Pair<List<Collection>, String>? = null
+    /** True while an add-on's manifest is still on its way, so the catalog list is incomplete. */
+    private var catalogsPending = false
     private val preferencesRef = atomic<Map<String, StoredHomeCatalogPreference>>(emptyMap())
     private var preferences: Map<String, StoredHomeCatalogPreference>
         get() = preferencesRef.value
@@ -123,6 +125,7 @@ object HomeCatalogSettingsRepository {
         collectionDefinitions = emptyList()
         lastCatalogSync = null
         lastCollectionSync = null
+        catalogsPending = false
         _uiState.value = HomeCatalogSettingsUiState()
     }
 
@@ -132,6 +135,7 @@ object HomeCatalogSettingsRepository {
         collectionDefinitions = emptyList()
         lastCatalogSync = null
         lastCollectionSync = null
+        catalogsPending = false
         preferences = emptyMap()
         heroEnabled = true
         showCatalogType = true
@@ -147,6 +151,7 @@ object HomeCatalogSettingsRepository {
         definitions = buildHomeCatalogDefinitions(addons)
         collectionDefinitions = buildCollectionDefinitions(collections)
         lastCatalogSync = syncInput
+        catalogsPending = addons.any { it.manifest == null && it.isRefreshing }
         lastCollectionSync = lastCollectionSync?.takeIf {
             it.first == collections && it.second == syncInput.locale
         }
@@ -156,17 +161,17 @@ object HomeCatalogSettingsRepository {
         }
         normalizePreferences()
         enforcePinnedCollectionsAtTop()
-        selectFirstHeroSourceIfNone()
         publish()
         persist()
     }
 
     /**
-     * After the add-on catalogs change, an empty hero selection would leave the featured carousel with
-     * nothing to show. Pick the first catalog in Home order; with no catalogs there is nothing to pick.
+     * The only time a featured source is picked for the user: with none selected the carousel would have
+     * nothing to show, so take the first catalog in Home order. With no catalogs there is nothing to
+     * pick, and while some are still loading the user's own choice may be among them.
      */
     private fun selectFirstHeroSourceIfNone() {
-        if (selectedHeroSourceCount() > 0) return
+        if (catalogsPending || selectedHeroSourceCount() > 0) return
         val catalogKeys = definitions.mapTo(mutableSetOf()) { it.key }
         val first = preferences.values.filter { it.key in catalogKeys }.minByOrNull { it.order } ?: return
         preferences = preferences + (first.key to first.copy(heroSourceEnabled = true))
@@ -357,7 +362,7 @@ object HomeCatalogSettingsRepository {
             val heroSourceEnabled = if (entry.isCollection) {
                 false
             } else {
-                (stored?.heroSourceEnabled ?: true) &&
+                stored?.heroSourceEnabled == true &&
                     enabledHeroSourceCount < HERO_SOURCE_SELECTION_LIMIT
             }
             if (heroSourceEnabled) {
@@ -372,6 +377,7 @@ object HomeCatalogSettingsRepository {
             )
         }
         preferences = normalized.toMap()
+        selectFirstHeroSourceIfNone()
     }
 
     private fun publish() {
@@ -385,7 +391,7 @@ object HomeCatalogSettingsRepository {
                     addonName = definition.addonName,
                     customTitle = preference?.customTitle.orEmpty(),
                     enabled = preference?.enabled ?: true,
-                    heroSourceEnabled = preference?.heroSourceEnabled ?: true,
+                    heroSourceEnabled = preference?.heroSourceEnabled ?: false,
                     order = preference?.order ?: 0,
                 )
             }
@@ -538,7 +544,7 @@ object HomeCatalogSettingsRepository {
                     key = key,
                     customTitle = item.customTitle,
                     enabled = item.enabled,
-                    heroSourceEnabled = existingHeroState[key] ?: true,
+                    heroSourceEnabled = existingHeroState[key] ?: false,
                     order = item.order,
                 )
             }
@@ -597,8 +603,6 @@ object HomeCatalogSettingsRepository {
         return StoredHomeCatalogPreference(
             key = key,
             enabled = true,
-            heroSourceEnabled = isCatalog &&
-                selectedHeroSourceCount(excludingKey = key) < HERO_SOURCE_SELECTION_LIMIT,
             order = _uiState.value.items.firstOrNull { it.key == key }?.order
                 ?: ((preferences.values.maxOfOrNull { it.order } ?: -1) + 1),
         )
